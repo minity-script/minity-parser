@@ -1,11 +1,9 @@
 {
-  "name": "@mclang/parser",
+  "name": "@minity/parser",
   "version": "1.0.0",
-  "description": "Parser for mclang, a scripting language for Vanilla Minecraft datapacks",
+  "description": "Parser for minity, a scripting language for Vanilla Minecraft datapacks",
   "main": "src/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "debug": "nodemon --inspect bin/index.js -e .js,.pegjs,.mclang,.json -w mclang -w examples/basic build examples/basic build/basic"
   },
   "author": "Zoran Obradović",
   "license": "ISC",

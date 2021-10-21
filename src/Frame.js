@@ -27,9 +27,9 @@ const Frame = exports.Frame =
       return this.T(node);
     }
     importFile = (file) => {
-      let mclang = require("./mclang.js");
+      let minity = require("./minity.js");
       let path = resolve(dirname(this.root.file), String(file));
-      mclang.compileFile(path, { result: this.result })
+      minity.compileFile(path, { result: this.result })
     }
     Nbt = (x,...args) => x instanceof TreeNode ? Nbt(this.T(x),...args) : Nbt(x,...args)
     toNbt = x => x instanceof TreeNode ? toNbt(this.T(x)) : toNbt(x)
@@ -115,7 +115,7 @@ const Frame = exports.Frame =
     }
 
     ifElse = (checks, thenCode, elseCode) => {
-      const stack = `storage zzz_mcl:${this.ns} stack`;
+      const stack = `storage zzz_minity:${this.ns} stack`;
       const top = `${stack}[-1]`;
       return [
         `data modify ${stack} append value [B;]`,
@@ -191,7 +191,7 @@ const Frame = exports.Frame =
   }
 
 Frame.Root = class FrameRoot extends Frame {
-  constructor({ file, ns = "zzz_mcl", args = {}, result } = {}) {
+  constructor({ file, ns = "zzz_minity", args = {}, result } = {}) {
     super();
     this.file = file;
     this.ns = ns;
@@ -266,10 +266,10 @@ Frame.Namespace = class NamespaceFrame extends Frame.Child {
     super(parent, { ns, scope:true });
     const lines = statements.map(this);
     this.fnName = this.ns+"/load_"+Math.random().toString(36).substr(2)
-    this.fn = this.result.addFunction("zzz_mcl", this.resloc, this.fnName, lines);
+    this.fn = this.result.addFunction("zzz_minity", this.resloc, this.fnName, lines);
   }
   get resloc() {
-    return "zzz_mcl:" + this.fnName
+    return "zzz_minity:" + this.fnName
   }
   get prefix() {
     return "--" + this.ns + "-"
@@ -288,10 +288,10 @@ Frame.Macro = class MacroFrame extends Frame.Child {
         this.transform(s) 
       )
     }
-    this.fn = this.result.addFunction("zzz_mcl", this.resloc, this.fnName, lines);
+    this.fn = this.result.addFunction("zzz_minity", this.resloc, this.fnName, lines);
   }
   get resloc() {
-    return "zzz_mcl:" + this.fnName
+    return "zzz_minity:" + this.fnName
   }
   get prefix() {
     return "--" + this.ns + "-" + this.macro.name + "-"

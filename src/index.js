@@ -4,4 +4,4 @@ const { Result } = require("./Result");
 const { Builder } = require("./Builder");
 const utils = require("./utils");
 
-module.exports = {...require("./mclang.js"),TreeNode,Frame,Result,Builder,utils};
+module.exports = {...require("./minity.js"),TreeNode,Frame,Result,Builder,utils};

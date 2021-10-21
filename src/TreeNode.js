@@ -1,4 +1,4 @@
-class MclError extends Error {
+class MinityError extends Error {
   constructor(message, location) {
     super(message);
     this.location = location;
@@ -17,7 +17,7 @@ const TreeNode = exports.TreeNode = class TreeNode {
     Object.assign(this, props);
     this.transformer = transformers[this.$];
     if (!this.transformer) {
-      throw new MclError("no transformer for " + this.$, this.location);
+      throw new MinityError("no transformer for " + this.$, this.location);
     }
   }
   transform = (frame, ...args) => {

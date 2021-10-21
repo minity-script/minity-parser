@@ -36,7 +36,7 @@ exports.Selector = class SelectorSpec {
       case "gamemode":
       case "name":
       case "advancements":
-        if (key in this.includes) throw new MclError("cannot duplicate " + key + "=");
+        if (key in this.includes) throw new MinityError("cannot duplicate " + key + "=");
       case "nbt":
       case "tag":
       case "predicate":
@@ -44,11 +44,11 @@ exports.Selector = class SelectorSpec {
         this.includes[key].push(cond);
         break;
       default:
-        throw new MclError("cannot use " + key + "=");
+        throw new MinityError("cannot use " + key + "=");
     }
   }
   score(key, cond) {
-    if (key in this.scores) throw new MclError("cannot duplicate score " + key);
+    if (key in this.scores) throw new MinityError("cannot duplicate score " + key);
     this.scores[key] = cond;
   }
   exclude(key, cond) {
@@ -64,7 +64,7 @@ exports.Selector = class SelectorSpec {
         this.excludes[key].push(cond);
         break;
       default:
-        throw new MclError("cannot use " + key + "=!");
+        throw new MinityError("cannot use " + key + "=!");
     }
   }
   format() {

@@ -1,7 +1,7 @@
 const { readFileSync, readdirSync, statSync, rmSync, writeFileSync, cpSync, mkdirSync } = require("fs");
 const { relative, dirname, basename, resolve, extname } = require("path");
 const { mergeAndConcat:merge } =require('merge-anything');
-const mclang = require("./mclang");
+const minity = require("./minity");
 const { Result } = require("./Result");
 const { walk } = require("./utils");
 
@@ -81,7 +81,7 @@ exports.Builder = class Builder {
       const dest = resolve(this.targetDirectory, "data", rel);
       output.json[dest] = require(path);
     }
-    mclang.compileFile(this.entryPoint, { result: this.result });
+    minity.compileFile(this.entryPoint, { result: this.result });
     console.log("Compiled.")
   }
 
@@ -98,7 +98,7 @@ exports.Builder = class Builder {
       rmSync(targetDirectory, { recursive: true });
     };
     mkdirSync(targetDirectory, { recursive: true });
-    writeFileSync(resolve(targetDirectory, ".mclang.fecit"), "", { encoding: "utf8" })
+    writeFileSync(resolve(targetDirectory, ".minity.fecit"), "", { encoding: "utf8" })
     for (const dest in output.other) {
       const path = output.other[dest];
       console.log('copying', relative(sourceDirectory, path))
@@ -118,9 +118,9 @@ exports.Builder = class Builder {
     if (!entry.isDirectory()) {
       throw new Error("Destination exists, but is not a directory: " + targetDirectory)
     };
-    const isMclDirectory = !!statSync(resolve(targetDirectory, ".mclang.fecit"), { throwIfNoEntry: false });
-    if (!isMclDirectory) {
-      throw new Error("Destination exists, but was not built with mclang: " + targetDirectory)
+    const isMinityDirectory = !!statSync(resolve(targetDirectory, ".minity.fecit"), { throwIfNoEntry: false });
+    if (!isMinityDirectory) {
+      throw new Error("Destination exists, but was not built with minity: " + targetDirectory)
     };
     return true;
   }

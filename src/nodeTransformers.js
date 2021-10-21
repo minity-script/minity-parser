@@ -136,7 +136,7 @@ const transformers = exports.transformers = {
   cmd_say: ({ parts }, { T }) => `say ${T(parts)}`,
   cmd_summon: ({ pos, type, nbt, then }, { T, anonFunction, Nbt, toNbt }) => {
     if (!then) return `summon ${T(type)}${nbt ? toNbt(nbt) : ''} ${pos ? T(pos) : "~ ~ ~"}`
-    const tag = "--mclang--internal-summoned"
+    const tag = "--minity--internal-summoned"
     nbt = Nbt(nbt || {});
     nbt.Tags = [...nbt.Tags || [], tag];
     return anonFunction([
@@ -176,7 +176,7 @@ const transformers = exports.transformers = {
 
   datapath: ({ head, path }, { T }) => `${T(head)} ${T(path)}`,
 
-  datapath_var: ({ path }, { T, ns }) => `storage ${ns}:mcl_vars ${T(path)}`,
+  datapath_var: ({ path }, { T, ns }) => `storage ${ns}:zzz_minity_vars ${T(path)}`,
   datahead_entity: ({ selector }, { T }) => `entity ${T(selector)}`,
   datahead_storage: ({ name }, { T }) => `storage ${T(name)}`,
   datahead_block: ({ position }, { T }) => `block ${T(position)}`,

@@ -3,13 +3,13 @@ const { assert } = require("console");
 const {readFileSync} = require("fs");
 const peggy = require("peggy");
 
-const grammar = readFileSync(__dirname + "/mclang.pegjs", { encoding: "utf8" });
+const grammar = readFileSync(__dirname + "/minity.pegjs", { encoding: "utf8" });
 const parser = peggy.generate(grammar);
 const { TreeNode } = require("./TreeNode");
 const { Result } = require("./Result");
 const { Frame } = require("./Frame");
 
-const mclang = {
+const minity = {
   Result,
   TreeNode,
   parse(text,options={}) {
@@ -18,7 +18,7 @@ const mclang = {
   },
   findError(text) {
     try {
-      mclang.compile(text,{});
+      minity.compile(text,{});
       return false;
     } catch (error) {
       return error;
@@ -30,20 +30,20 @@ const mclang = {
     return root.result;
   },
   compile(text, {...rest} ) {
-    const tree = mclang.parse(text,{
+    const tree = minity.parse(text,{
       ...rest,
       N: (...args) => {
         const node = new TreeNode(...args);
         return node;
       }
     })
-    const ret = mclang.transform(tree,{...rest});
+    const ret = minity.transform(tree,{...rest});
     return ret;
   },
   compileFile(file,{...rest}) {
     try {
       const text = readFileSync(file, { encoding: "utf8" });
-      return mclang.compile(text,{file,...rest});
+      return minity.compile(text,{file,...rest});
     } catch (e) {
       e.file ??= file;
       throw(e);
@@ -51,4 +51,4 @@ const mclang = {
   }
 }
 
-Object.assign(module.exports,{...mclang});
+Object.assign(module.exports,{...minity});

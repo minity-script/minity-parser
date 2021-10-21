@@ -8,7 +8,7 @@ const Result = exports.Result = class Result {
     this.namespaces = {};
     this.constants = {};
     this.addNamespace("minecraft","Internal");
-    this.main = this.addNamespace("zzz_mcl","Main");
+    this.main = this.addNamespace("zzz_minity","Main");
   }
   addNamespace(ns,kind="Custom") {
     let namespace = this.namespaces[ns];
@@ -22,9 +22,9 @@ const Result = exports.Result = class Result {
     return this.addNamespace(ns);
   }
   addConstant(value) {
-    const name = "--mcl--const-" + value;
+    const name = "--minity--const-" + value;
     if (!this.constants[value]) {
-      const objective = "--mcl--const";
+      const objective = "--minity--const";
       const id = name + " " + objective;
       this.constants[value] = {
         name,
@@ -126,7 +126,7 @@ ResultNamespace.Custom = class ResultNamespaceCustom extends ResultNamespace {
     super(result,rest);
     this.addObjective(`--${this.ns}--vars`, "dummy");
     this.addAnonFunction("",()=>[
-      `data modify storage zzz_mcl:${this.ns} stack set value []`,
+      `data modify storage zzz_minity:${this.ns} stack set value []`,
       ... Object.values(this.objectives).map(it=>it.declare)
     ],"objectives").addTag("minecraft","load");
   }
