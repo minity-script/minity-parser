@@ -41,7 +41,9 @@ exports.Builder = class Builder {
 
   result = new Result;
 
-  constructor({ path, entryPoint, copyDirectories, buildDirectory }) {
+  constructor(options) {
+    const { description, path, entryPoint, copyDirectories, buildDirectory } = options;
+    this.description =description || basename(path);
     this.projectDirectory = path;
     this.entryPoint = entryPoint;
     this.copyDirectories = copyDirectories;
@@ -113,6 +115,12 @@ exports.Builder = class Builder {
       wrote++
       file.write(buildDirectory);
     }
+    writeFileSync(resolve(buildDirectory,"pack.mcmeta"),JSON.stringify({
+      "pack": {
+          "pack_format": 8,
+          "description": this.description
+      }
+    },null,2),{encoding:"utf-8",recursive:true})
     console.error(`  Copied ${copied} files, wrote ${wrote} files.`)
   }
 
