@@ -31,7 +31,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 
 
   DeclareEvent 
-    = "when" 
+    = "on" 
       __ trigger:resloc_mc conditions:(CONCAT @object) 
       __ "then" then:Instructions {
         return N('DeclareEvent',{trigger,conditions,then})
@@ -64,7 +64,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       return {numbered,named:named||{}}
     }
     / named:call_args_named {
-      return {numbered:[],named:named}
+      return {numbered:[],named:named||{}}
     }
 
     call_args_numbered = head:call_arg_numbered tail:(COMMA @call_arg_numbered)* {
@@ -184,32 +184,45 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     	= no_expand_char_inline
       / &"{" !template_expand @"{"
 
+    cmd_arg_count_item 
+      = __
+        count: unsigned_int
+        __
+        item: item_spec {
+          return {count,item}
+        }
+      / __
+        item: item_spec 
+        count: ( __ @unsigned_int)? {
+          return {count,item}
+        }
+        
+
     cmd 
     = "summon" 
       pos:(_ @Position)? 
-      __ type:resloc_mc CONCAT 
+      __ 
+      type:resloc_mc CONCAT 
       nbt:(@object)? 
       then:(__ "then" __ @Instructions )? {
         return N('cmd_summon', { pos,type,nbt, then } )
       }
     / "give" 
       selector:cmd_arg_selector_optional 
-      count:(__ @int)?  
-      __ type:resloc_mc 
-      CONCAT nbt:(@object)? {
-        return N('cmd_give', { selector,type,nbt, count } )
+      args: cmd_arg_count_item {
+        return N('cmd_give', { selector,...args } )
       }
     / "clear" 
       selector:cmd_arg_selector_optional 
-      count:(__ @int)?  
-      __ type:resloc_mc
-      CONCAT nbt:(@object)? {
-        return N('cmd_clear', { selector,type,nbt, count } )
+      args: cmd_arg_count_item {
+        return N('cmd_clear', { selector,...args } )
       }
     / "setblock" 
       pos:(_ @Position)? 
-      __ block:block_spec {
-        return N('cmd_setblock', { pos, block } )
+      __
+      block:block_spec 
+      mode: (__ @("destroy"/"keep"/"replace"))? {
+        return N('cmd_setblock', { pos, block, mode } )
       }
     / "after" __ time:float unit:[tds]? 
       statements:Instructions 
@@ -806,6 +819,11 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
         return N('block_state',{name,value})
       } 
 
+  item_spec 'item predicate'
+    = resloc:resloc_or_tag_mc CONCAT nbt:(@object)? {
+        return N('item_spec',{resloc,nbt})
+      }
+
 
 //\\ parts
   
@@ -992,6 +1010,16 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       = float_lit
       / int_lit
 
+    unsigned_int 
+      = name:arg_name {	
+          return N('arg', { type:'count',name } ) 
+        }
+      / unsigned_int_lit
+
+    unsigned_int_lit 
+      = $(UNSIGNED) {
+          return N('number_lit', { type:'int',value:1 } )
+        }
     
     int 
       = name:arg_name {	
@@ -1057,14 +1085,25 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       = value:$(INT (FRAC EXP?/EXP)) { return +value }
 
     EXP
-      = [eE] ([-+])? [0-9]+
+      = [eE] ([-+])? DIGIT+
 
     FRAC
-      = "." [0-9]+
+      = "." DIGIT+
 
     INT
-      = value: $([+-]? ("0"/[1-9][0-9]*)) { return +value }
+      = value: $([+-]? UNSIGNED) { return +value }
 
+    UNSIGNED
+      = value:$( ZERO / !ZERO DIGIT+) { return +value }
+
+    ZERO
+      = "0"
+
+    DIGIT
+      = [0-9]
+
+    DIGIT_NO_ZERO
+      = [0-9]
 
   //\\ ident
     ident 
@@ -1335,7 +1374,6 @@ raw_part
   COMMA = ___ "," ___
   EQUALS = _ "=" _
 
-  DIGIT  = [0-9]
   HEXDIG = [0-9a-f]i
   WORD_INIT = [A-Z_]i
   WORD_CHAR = [A-Z0-9_]i
@@ -1363,7 +1401,7 @@ NAME
 RESERVED 
   = ( CONDITION / GAMEMODE / SORT
     / MOD / ANCHOR / DIRECTION
-    / KEYWORD / DECLARE / SPECIAL / COMMAND
+    / KEYWORD / DECLARE / PSEUDO / COMMAND
     / STRINGIFY / BOOLEAN / OTHER
     ) ![a-z-_]i
 
@@ -1393,10 +1431,11 @@ DIRECTION
 
 KEYWORD
   = "after" / "else" / "every" / "and" / "if" / "import" / "repeat" 
-  / "test" / "then" / "until" / "unless" / "when" / "while" / "with" 
+  / "test" / "then" / "until" / "unless" / "on" / "while" / "when" 
+  / "except" / "catch"  
 
-SPECIAL
-  = "else" / "self" / "then" 
+PSEUDO
+  = "resolve" / "reject" / "self" 
 
 DECLARE
   = "function" / "macro" / "namespace" / "score" / "tag" / "var" 
@@ -1518,7 +1557,18 @@ OTHER
   	return [head,...tail]
   }
   Declaration = declare 
-  Instruction = BlockArg/ Structure / assign / command / cmd / builtin / CallSelf / FunctionCall / MacroCall 
+  Instruction 
+    = BlockArg 
+    / Structure
+    / PromiseCall 
+    / assign 
+    / command 
+    / cmd 
+    / builtin 
+    / CallSelf 
+    / FunctionTagCall
+    / MacroCall 
+
   Executable = last:(CodeBlock / (__ @Instruction)) {
       return N( 'Executable', { last } )
   }
@@ -1642,13 +1692,49 @@ OTHER
     / "unless" @TestFalse 
     
   LoopConditionals
-  = head:LoopConditional tail:(__ "and" __ @LoopConditional)* {
-    return N('Conditionals',{subs:[head,...tail]})
-  } 
+    = head:LoopConditional tail:(__ "and" __ @LoopConditional)* {
+      return N('Conditionals',{subs:[head,...tail]})
+    } 
 
   LoopConditional
-  = "while" @TestTrue
-  / "until" @TestFalse
+    = "while" @TestTrue
+    / "until" @TestFalse
+
+  
+  
+
+  MacroCallSpec 
+    = ns:(@WORD ":")? name:NAME args:(_ OPEN @call_args CLOSE)? {
+        return N('MacroCallSpec', {ns, name, args})
+      }
+
+  PromiseCall
+    = head:Promise tail:(__ "and" __ @Promise)* 
+      clauses: ThenCatchClause {
+        return N('PromiseCall',{promises:[head,...tail],...clauses})
+      } 
+
+  Promise
+    = "when" __ @PromiseTrue
+    / "when" OPEN @PromiseTrue CLOSE
+    / "except" __ @PromiseFalse
+    / "except" OPEN @PromiseFalse CLOSE
+
+  PromiseTrue = spec:MacroCallSpec {
+    return N("PromiseTrue",{spec})
+  }
+  PromiseFalse = spec:MacroCallSpec {
+    return N("PromiseFalse",{spec})
+  }
+
+  ThenCatchClause = then:ThenClause _catch:CatchClause? {
+    return {then,_catch}
+  }
+
+  ThenClause = __ "then" __ @Instructable
+  CatchClause = __ "catch" __ @Instructable
+  
+
 
 /*
    /  "repeat" __ mods:mods? _ statements:Braces conds:(__ @repeat_cond)+ then:(__ "then" @Braces)? {
@@ -1656,29 +1742,32 @@ OTHER
    } 
    
 */
+
+  
+
   FunctionCall
     =  resloc:FunctionCallResloc {
       return N('FunctionCall', { resloc } )
+    }
+
+  FunctionTagCall
+    =  restag:restag _ OPEN _ CLOSE {
+      return N('FunctionTagCall', { restag } )
     }
 
   FunctionCallResloc = !RESERVED @resloc:resloc_or_tag _ OPEN _ CLOSE 
 
 
   MacroCall
-    = "with" __ ns:(@NAME ":")? name:NAME _ OPEN args:call_args CLOSE 
-      then:Instructable? 
-      otherwise:(__ "else" __ @Instructable)? {
-        return N('MacroCall', { ns, name, args, then, otherwise } )
-      }
-    / ns:(@NAME ":")? name:NAME _ OPEN args:call_args CLOSE {
+    = ns:(@NAME ":")? name:NAME _ OPEN args:call_args? CLOSE {
         return N('MacroCall', { ns, name, args } )
       }
       
   BlockArg
-    = "then" _ "(" _ ")" {
+    = "resolve" _ "(" _ ")" {
         return N('BlockArgThen')
       }
-    / "else" _ "(" _ ")"  {
+    / "reject" _ "(" _ ")"  {
         return N('BlockArgElse')
       }
 

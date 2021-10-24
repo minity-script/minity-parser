@@ -8,7 +8,7 @@ const transformers = exports.transformers = {
     namespaces.map(T);
   },
   import: ({ file }, { importFile, Nbt }) => {
-    importFile(Nbt(file));
+    importFile(String(Nbt(file)));
   },
   DeclareNamespace: ({ ns, globals }, { T, declareNamespace }) => {
     const fn = declareNamespace(ns, globals);
@@ -103,6 +103,7 @@ const transformers = exports.transformers = {
   },
   cond_brackets_pair: ({ name, value }, { T, toNbt }) => T(name) + "=" + T(value),
   cond_brackets_braces: ({ items }, { T, toNbt }) => "{" + items.map(T).join(",") + "}",
+  item_spec: ({ resloc, nbt }, { T, O }) => `${T(resloc)}${O(nbt)}`,
   block_spec_state: ({ name, value }, { T }) => T(name) + "=" + T(value),
   block_spec_states: ({ states }, { T }) => "[" + states.map(T).join(",") + "]",
   block_spec: ({ resloc, states, nbt }, { T, O }) => `${T(resloc)}${O(states)}${O(nbt)}`,
@@ -148,15 +149,12 @@ const transformers = exports.transformers = {
     ])
   },
   
-  cmd_give: ({ selector, count, type, nbt }, { toNbt, T }) => {
-    count = count ? toNbt(count) : "1";
-    nbt = nbt ? toNbt(nbt) : "{}";
-    return `give ${T(selector)} ${T(type)}${nbt} ${count}`
+  cmd_give: ({ selector, count, item }, { toNbt, T }) => {
+    return `give ${T(selector)} ${T(item)} ${toNbt(count??1)}`
   },
-  cmd_clear: ({ selector, count, type, nbt }, { toNbt, T }) => {
-    count = count ? toNbt(count) : "1";
-    nbt = nbt ? toNbt(nbt) : "{}";
-    return `clear ${T(selector)} ${T(type)}${nbt} ${count}`
+  cmd_clear: ({ selector, count, item }, { toNbt, T }) => {
+    count = count ? toNbt(count) : "";
+    return `clear ${T(selector)} ${T(item)} ${count}`
   },
   cmd_after: ({ time, unit, statements,then }, { T, anonFunction, toNbt }) => {
     const lines = statements.map(T);
@@ -422,18 +420,54 @@ const transformers = exports.transformers = {
     setArg(name,Nbt(value));
     return "";
   },
-  FunctionCall:({resloc }, { T }) =>  `function ${T(resloc)}`,
+  FunctionTagCall:({restag }, { T }) =>  `function ${T(restag)}`,
   MacroCall:(
       {ns, name, args, then, otherwise }, 
       { T, Nbt, macroExists, expandMacro, getMacro, ns:NS }
     ) => {
-      if (!macroExists(ns,name) && !args && !then && !otherwise) {
-        return `function ${ns||NS}:${name}`;
+    if (macroExists(ns,name)) {
+
+      // this is a macro?
+
+      const macro = getMacro(ns,name);
+      const new_args = {};
+      
+      const named = args?.named || {};
+      const numbered = args?.numbered || [];
+
+      for (const i in macro.args) {
+        const { name, def } = macro.args[i];
+        if (name in named) {
+          new_args[name] = Nbt(named[name])
+        } else if (i in numbered) {
+          new_args[name] = Nbt(numbered[i])
+        } else if (def) {
+          new_args[name] = Nbt(def)
+        } else {
+          throw new Error("arg " + name + " in macro " + macro.name + " is not optional")
+        }
       }
-      assert(macroExists(ns,name),`no such macro ${ns||NS}:${name}`)
+      const thenCode = new_args[Symbol.for("BlockArgThen")] = () => then ? T(then) : ""
+      const elseCode = new_args[Symbol.for("BlockArgElse")] = () => otherwise ? T(otherwise) : ""
+      return "function " + expandMacro(ns,name, new_args).resloc
+    }
+    // not a macro, so maybe an ordinary function call, with no arguments?
+    if (!args && !then && !otherwise) {
+      return `function ${ns||NS}:${name}`;
+    }
+    // neither, so it's an error
+    assert(false,`no such macro ${ns||NS}:${name}`)
+  },
+  arg:({name}, { getArg }) => getArg(name),
+  MacroCallSpec:(
+    {ns, name, args, then, otherwise }, 
+    { T, Nbt, macroExists, expandMacro, getMacro, ns:NS }
+  ) => {
+    assert(macroExists(ns,name),`no such macro ${ns||NS}:${name}`)
     const macro = getMacro(ns,name);
     const new_args = {};
-    const { named={}, numbered=[] } = args||{};
+    const named = args?.named || {};
+    const numbered = args?.numbered || [];
     for (const i in macro.args) {
       const { name, def } = macro.args[i];
       if (name in named) {
@@ -446,9 +480,26 @@ const transformers = exports.transformers = {
         throw new Error("arg " + name + " in macro " + macro.name + " is not optional")
       }
     }
-    const thenCode = new_args[Symbol.for("BlockArgThen")] = () => then ? T(then) : ""
-    const elseCode = new_args[Symbol.for("BlockArgElse")] = () => otherwise ? T(otherwise) : ""
-    return "function " + expandMacro(ns,name, new_args).resloc
+    return {ns,name,args:new_args};
   },
-  arg:({name}, { getArg }) => getArg(name)
+  PromiseTrue:({spec},{expandMacro,T},{thenCode,catchCode}) => {
+    const {ns,name,args} = T(spec);
+    args[Symbol.for("BlockArgThen")] = () => thenCode;
+    args[Symbol.for("BlockArgElse")] = () => catchCode;
+    return "function " + expandMacro(ns,name, args).resloc
+  },
+  PromiseFalse:({spec},{expandMacro,T},{thenCode,catchCode}) => {
+    const {ns,name,args} = T(spec);
+    args[Symbol.for("BlockArgThen")] = () => catchCode;
+    args[Symbol.for("BlockArgElse")] = () => thenCode;
+    return "function " + expandMacro(ns,name, args).resloc
+  },
+  PromiseCall:({promises,then,_catch},{anonFunction,T,O}) =>{
+    let thenCode = T(then);
+    const catchCode = O(_catch);
+    for (const promise of promises.concat().reverse()) {
+      thenCode = T(promise,{thenCode,catchCode})
+    }
+    return thenCode;
+  }
 }

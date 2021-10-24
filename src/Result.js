@@ -55,7 +55,6 @@ const Result = exports.Result = class Result {
       ...Object.values(this.constants).map(it => it.declare)
     ]
   }
-
   get files() {
     return [
       ...Object.values(this.namespaces).flatMap(it => it.files)

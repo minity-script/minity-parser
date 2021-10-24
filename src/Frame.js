@@ -4,7 +4,8 @@ const { Result } = require("./Result");
 const { TreeNode } = require("./TreeNode");
 const { Nbt } = require("./Nbt");
 const { resolve, dirname } = require("path");
-const { randomString } = require("./utils.js");
+const { randomString, resolveModulePath } = require("./utils.js");
+const { existsSync } = require("fs");
 const { isNbt, toNbt, toSnbt, toJson } = Nbt;
 
 let blockCount = 0
@@ -27,8 +28,8 @@ const Frame = exports.Frame =
       return this.T(node);
     }
     importFile = (file) => {
+      const path = resolveModulePath(this.root.file,file);
       let minity = require("./minity.js");
-      let path = resolve(dirname(this.root.file), String(file));
       minity.compileFile(path, { result: this.result })
     }
     Nbt = (x,...args) => x instanceof TreeNode ? Nbt(this.T(x),...args) : Nbt(x,...args)
@@ -191,7 +192,7 @@ const Frame = exports.Frame =
   }
 
 Frame.Root = class FrameRoot extends Frame {
-  constructor({ file, ns = "zzz_minity", args = {}, result } = {}) {
+  constructor({ file, ns = "zzz_minity", args = {}, result, checkErrors } = {}) {
     super();
     this.file = file;
     this.ns = ns;
@@ -199,6 +200,7 @@ Frame.Root = class FrameRoot extends Frame {
     this.scopes = [];
     this.root = this;
     this.result = result ?? new Result();
+    this.checkErrors = checkErrors;
   }
 
   macros = {};

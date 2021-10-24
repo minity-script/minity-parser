@@ -16,9 +16,9 @@ const minity = {
     const ret =  parser.parse(text,options);
     return ret;
   },
-  findError(text) {
+  findError(text,{...rest}={}) {
     try {
-      minity.compile(text,{});
+      minity.compile(text,{checkErrors:true,...rest});
       return false;
     } catch (error) {
       return error;

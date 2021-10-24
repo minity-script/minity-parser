@@ -1,7 +1,8 @@
 exports.randomString = ()=>Math.random().toString(36).substr(2)
 
-const {readdirSync} = require("fs");
-const { relative, dirname, basename, resolve, extname } = require("path");
+const assert = require("assert");
+const {readdirSync, statSync, existsSync} = require("fs");
+const { relative, dirname, basename, resolve, extname, isAbsolute } = require("path");
 
 exports.walk = function walk(dir, cur = dir) {
   var ret = [];
@@ -20,4 +21,18 @@ exports.walk = function walk(dir, cur = dir) {
     }
   }
   return ret;
+}
+
+exports.resolveModulePath = (from,to) => {
+  assert(isAbsolute(to) || to.startsWith("."), "Relative paths must begin with '.'");
+  var path = resolve(dirname(from),to)
+  if (!existsSync(path)) {
+    path+=".minity"
+  } else  {
+    const entry = statSync(path,{throwIfNoEntry:false})
+    if (entry.isDirectory()) path=resolve(path,"indix.minity");
+  }
+  //console.log({from,to,path})
+  assert(existsSync(path),"module not found: "+path)
+  return path;
 }

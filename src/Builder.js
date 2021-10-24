@@ -41,15 +41,15 @@ exports.Builder = class Builder {
 
   result = new Result;
 
-  constructor({ sourceDirectory, entryPoint, filesDirectories, targetDirectory }) {
-    this.sourceDirectory = sourceDirectory;
+  constructor({ path, entryPoint, copyDirectories, buildDirectory }) {
+    this.projectDirectory = path;
     this.entryPoint = entryPoint;
-    this.filesDirectories = filesDirectories;
-    this.targetDirectory = targetDirectory
+    this.copyDirectories = copyDirectories;
+    this.buildDirectory = buildDirectory
   }
 
   scan() {
-    for (const path of this.filesDirectories) {
+    for (const path of this.copyDirectories) {
       const files = walk(path);
       for (const { path, rel, extension } of files) {
         if (extension === '.json') {
@@ -74,15 +74,15 @@ exports.Builder = class Builder {
   prepare() {
     const { input, output } = this;
     for (const { rel, path } of input.other) {
-      const dest = resolve(this.targetDirectory, rel);
+      const dest = resolve(this.buildDirectory, rel);
       output.other[dest] = path;
     }
     for (const { rel, path } of input.json) {
-      const dest = resolve(this.targetDirectory, "data", rel);
+      const dest = resolve(this.buildDirectory, "data", rel);
       output.json[dest] = require(path);
     }
     minity.compileFile(this.entryPoint, { result: this.result });
-    console.log("Compiled.")
+    console.log("\n  "+this.entryPoint+" compiled OK.")
   }
 
   build() {
@@ -93,34 +93,39 @@ exports.Builder = class Builder {
   }
 
   write() {
-    const { targetDirectory, sourceDirectory, output } = this;
+    let copied = 0;
+    let wrote = 0;
+    const { buildDirectory, projectDirectory, output } = this;
     if (this.checkTo()) {
-      rmSync(targetDirectory, { recursive: true });
+      rmSync(buildDirectory, { recursive: true });
     };
-    mkdirSync(targetDirectory, { recursive: true });
-    writeFileSync(resolve(targetDirectory, ".minity.fecit"), "", { encoding: "utf8" })
+    mkdirSync(buildDirectory, { recursive: true });
+    writeFileSync(resolve(buildDirectory, ".minity.fecit"), "", { encoding: "utf8" })
     for (const dest in output.other) {
       const path = output.other[dest];
-      console.log('copying', relative(sourceDirectory, path))
+      copied++
+      //console.log('copying', relative(projectDirectory, path))
       mkdirSync(dirname(dest), { recursive: true });
       cpSync(path, dest);
     }
     for (const file of this.result.files) {
-      console.log("writing", resolve(targetDirectory, file.dest));
-      file.write(targetDirectory);
+      //console.log("writing", resolve(buildDirectory, file.dest));
+      wrote++
+      file.write(buildDirectory);
     }
+    console.error(`  Copied ${copied} files, wrote ${wrote} files.`)
   }
 
   checkTo() {
-    const { targetDirectory } = this;
-    const entry = statSync(targetDirectory, { throwIfNoEntry: false });
+    const { buildDirectory } = this;
+    const entry = statSync(buildDirectory, { throwIfNoEntry: false });
     if (!entry) return false;
     if (!entry.isDirectory()) {
-      throw new Error("Destination exists, but is not a directory: " + targetDirectory)
+      throw new Error("Destination exists, but is not a directory: " + buildDirectory)
     };
-    const isMinityDirectory = !!statSync(resolve(targetDirectory, ".minity.fecit"), { throwIfNoEntry: false });
+    const isMinityDirectory = !!statSync(resolve(buildDirectory, ".minity.fecit"), { throwIfNoEntry: false });
     if (!isMinityDirectory) {
-      throw new Error("Destination exists, but was not built with minity: " + targetDirectory)
+      throw new Error("Destination exists, but was not built with minity: " + buildDirectory)
     };
     return true;
   }
