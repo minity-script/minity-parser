@@ -20,6 +20,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "ssh://zocky@milci.ljudmila.net/home/zocky/src/mlc"
+    "url": "https://github.com/minity-script/parser.git"
   }
 }
