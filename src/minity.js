@@ -1,10 +1,17 @@
 
-const { assert } = require("console");
 const {readFileSync} = require("fs");
-const peggy = require("peggy");
 
-const grammar = readFileSync(__dirname + "/minity.pegjs", { encoding: "utf8" });
-const parser = peggy.generate(grammar);
+const parser = (()=>{
+  if (process.env.DEBUG) {
+    const peggy = require("peggy");
+    const grammar = readFileSync(__dirname + "/minity.pegjs", { encoding: "utf8" });
+    return peggy.generate(grammar);
+  } else {
+    return require("./minity-parser.js")
+  }
+})()
+
+
 const { TreeNode } = require("./TreeNode");
 const { Result } = require("./Result");
 const { Frame } = require("./Frame");
