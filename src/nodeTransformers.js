@@ -103,7 +103,7 @@ const transformers = exports.transformers = {
   },
   cond_brackets_pair: ({ name, value }, { T, toNbt }) => T(name) + "=" + T(value),
   cond_brackets_braces: ({ items }, { T, toNbt }) => "{" + items.map(T).join(",") + "}",
-  item_spec: ({ resloc, nbt }, { T, O }) => `${T(resloc)}${O(nbt)}`,
+  item_spec: ({ resloc, nbt }, { T, toNbt }) => `${T(resloc)}${nbt ? toNbt(nbt) : ""}`,
   block_spec_state: ({ name, value }, { T }) => T(name) + "=" + T(value),
   block_spec_states: ({ states }, { T }) => "[" + states.map(T).join(",") + "]",
   block_spec: ({ resloc, states, nbt }, { T, O }) => `${T(resloc)}${O(states)}${O(nbt)}`,
