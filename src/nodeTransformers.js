@@ -395,6 +395,12 @@ const transformers = exports.transformers = {
     }
   },
   every_until: ({ statements, conds, then, time, unit }, { T, Nbt, addBlock, anonFunction, ifElse }) => {
+    if (!conds) {
+      const lines = statements.map(T);
+      const block = addBlock(lines);
+      block._content.push(`schedule function ${block.resloc} ${Nbt(time)}${unit}`)
+      return "function " + block.resloc;
+    }
     if (!then) {
       const lines = statements.map(T);
       const block = addBlock(lines);
