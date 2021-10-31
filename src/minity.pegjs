@@ -646,6 +646,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       / "-="
       / "*="
       / "/="
+      / "%="
       / ("<=" / "<") { return "<" }
       / (">=" / ">") { return ">" }
       
