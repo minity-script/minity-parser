@@ -128,7 +128,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     = id: scoreboard_id EQUALS {
         return N('assign_store_scoreboard',{id})
       }
-    / path: datapath EQUALS scale:(@number _"*" _ )? {
+    / path: datapath EQUALS scale:(@typed_number _"*" _ )? {
         return N('assign_store_datapath',{path,scale})
       }
     / "bossbar" __ id:resloc __ prop:("value"/"max"/"visible") EQUALS {
@@ -784,12 +784,13 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       / modify:"prepend" __ left:datapath __ scale:(_ @typed_number _ "*" _)? right:assign_run {
           return N('datapath_modify_execute',{modify,left,right,index:0, scale})
         }
-      / left:datapath EQUALS  right:typed_value !(_ "*") {
-          return N('datapath_modify_value', {modify: 'set', left, right } )
-        }
       / left:datapath EQUALS  right:datapath  {
           return N('datapath_modify_datapath', {modify: 'set', left, right } )
         }
+      / left:datapath EQUALS  right:typed_value !(_ "*") {
+          return N('datapath_modify_value', {modify: 'set', left, right } )
+        }
+      
 
  
 
@@ -1619,8 +1620,8 @@ OTHER
   / MOD:
     ( "as"
     / "at"
-    / "pos" "itioned?" __ "as" { return "positioned as" }
-    / "rot" "ated?" __ "as" { return "rotated as" }
+    / "pos" "itioned"? __ "as" { return "positioned as" }
+    / "rot" "ated"? __ "as" { return "rotated as" }
     ) arg:mod_arg_selector {
     return N( 'ModifierNative', { MOD, arg } )
   }

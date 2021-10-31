@@ -136,12 +136,12 @@ const transformers = exports.transformers = {
   command: ({ command }, { T }) => T(command),
   cmd_say: ({ parts }, { T }) => `say ${T(parts)}`,
   cmd_summon: ({ pos, type, nbt, then }, { T, anonFunction, Nbt, toNbt }) => {
-    if (!then) return `summon ${T(type)}${nbt ? toNbt(nbt) : ''} ${pos ? T(pos) : "~ ~ ~"}`
+    if (!then) return `summon ${T(type)} ${pos ? T(pos) : "~ ~ ~"} ${nbt ? toNbt(nbt) : ''}`
     const tag = "--minity--internal-summoned"
     nbt = Nbt(nbt || {});
     nbt.Tags = [...nbt.Tags || [], tag];
     return anonFunction([
-      `summon ${T(type)} ${pos ? T(pos) : "~ ~ ~"} ${toNbt(nbt)}`,
+      `summon ${T(type)} ${pos ? T(pos) : "~ ~ ~"} ${nbt ? toNbt(nbt) : ''}`,
       `execute as @e[tag=${tag}] run ${anonFunction([
         `tag @s remove ${tag}`,
         ...then.map(T)
@@ -245,7 +245,13 @@ const transformers = exports.transformers = {
   assign_run_statement: ({ statement }, { T }) => `${T(statement)}`,
   assign_run_conditions: ({ conds }, { T }) => `${T(conds)}`,
 
-  assign_bossbar_set: ({id, prop,value},{T})=>`bossbar set ${T(id)} ${prop} ${T(value)}`,
+  assign_bossbar_set: ({id, prop,value},{T})=>{
+    if (prop=='name') {
+      return `bossbar set ${T(id)} ${prop} ${JSON.stringify(T(value))}`
+    } else {
+      return `bossbar set ${T(id)} ${prop} ${T(value)}`
+    }
+  },
 
   test_entity: ({ selector }, { T }) => `entity ${T(selector)}`,
   test_datapath: ({ path }, { T }) => `data ${T(path)}`,
@@ -334,7 +340,8 @@ const transformers = exports.transformers = {
     return ""
   },
 
-  bossbar_add: ({id,name},{T,toNbt})=>`bossbar add ${T(id)} ${toNbt(name)}`,
+  bossbar_add: ({id,name},{T,Nbt})=>`bossbar add ${T(id)} ${JSON.stringify(Nbt(name))}`,
+  bossbar_remove: ({id},{T,toNbt})=>`bossbar remove ${T(id)}`,
 
   /************************************************************************* */
   Execution: ({ modifiers, executable }, { T }) => `execute ${modifiers.map(T).join(" ")} ${T(executable)}`,

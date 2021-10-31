@@ -135,6 +135,7 @@ ResultNamespace.Main = class ResultNamespaceCustom extends ResultNamespace.Custo
   constructor(result,{...rest}) {
     super(result,{...rest});
     this.addAnonFunction("",()=>[
+      'scoreboard objectives add --minity--const dummy',
       ... Object.values(this.result.constants).map(it=>it.declare)
     ],"constants").addTag("minecraft","load");
   }

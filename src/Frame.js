@@ -249,7 +249,7 @@ Frame.Function = class FunctionFrame extends Frame.Child {
     const lines = [];
     for (const s of statements) {
       lines.push(
-        "# "+s.text.split(/[\r\n]+/).join("\n# "),
+        //"# "+s.text.split(/[\r\n]+/).join("\n# "),
         this.transform(s) )
     }
     //const lines = statements.map(this);
@@ -286,7 +286,7 @@ Frame.Macro = class MacroFrame extends Frame.Child {
     const lines = [];
     for (const s of this.macro.statements) {
       lines.push(
-        "# "+s.text.split(/[\r\n]+/).join("\n# "),
+        //"# "+s.text.split(/[\r\n]+/).join("\n# "),
         this.transform(s) 
       )
     }
