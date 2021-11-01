@@ -310,7 +310,6 @@ const transformers = exports.transformers = {
         run = T(right)
         break;
     }
-    console.log({target,type,store,run})
     return `execute store success ${store} ${run}`
   },
   assign_scoreboard_value: ({ left, right }, { T }) => `scoreboard players set ${T(left)} ${T(right)}`,
