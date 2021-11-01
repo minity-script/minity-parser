@@ -1,6 +1,6 @@
 
-const {rawTags} = require("./rawTags");
-const {Selector, SelectorUUID} = require("./Selector");
+const { rawTags } = require("./rawTags");
+const { Selector, SelectorUUID } = require("./Selector");
 const { randomString } = require("./utils");
 const assert = require("assert");
 const transformers = exports.transformers = {
@@ -15,25 +15,25 @@ const transformers = exports.transformers = {
     fn.addTag("minecraft", "load");
     return "";
   },
-  DeclareFunction: ({ name, tags, statements }, { T, declareFunction, ns:NS }) => {
+  DeclareFunction: ({ name, tags, statements }, { T, declareFunction, ns: NS }) => {
     const fn = declareFunction(T(name), statements);
-    for (const {ns,name} of tags) {
+    for (const { ns, name } of tags) {
       fn.addTag(ns ? T(ns) : NS, T(name));
     }
     return "# function " + fn.resloc;
   },
-  DeclareMacro:({name,...props}, { declareMacro }) => {
-    declareMacro(name,props);
+  DeclareMacro: ({ name, ...props }, { declareMacro }) => {
+    declareMacro(name, props);
     return "";
   },
-  DeclareEvent({trigger,conditions,then}, { T, ns, declareEvent, addBlock }) {
+  DeclareEvent({ trigger, conditions, then }, { T, ns, declareEvent, addBlock }) {
     const id = randomString();
     const block = addBlock([
       ...then.map(T),
       `advancement revoke @s only ${ns}:${id}`
     ])
-    
-    declareEvent(id, T(trigger),T(conditions),block.resloc);
+
+    declareEvent(id, T(trigger), T(conditions), block.resloc);
     return "";
   },
   CallSelf: ({ }, { resloc }) => "function " + resloc,
@@ -53,10 +53,10 @@ const transformers = exports.transformers = {
     return ret;
   },
   string_json: ({ value }, { Nbt, toJson }) => {
-    return Nbt(JSON.stringify(Nbt(value)),true);
+    return Nbt(JSON.stringify(Nbt(value)), true);
   },
   string_snbt: ({ value }, { Nbt, toNbt }) => {
-    return Nbt(toNbt(value),true);
+    return Nbt(toNbt(value), true);
   },
   array_lit: ({ items }, { T, Nbt }) => Nbt(items.map(T)),
   template_lit: ({ parts }, { T, Nbt }) => Nbt(parts.map(Nbt).join("")),
@@ -75,11 +75,11 @@ const transformers = exports.transformers = {
     for (const c of conditions) T(c, { spec });
     return spec
   },
-  selector_uuid: ({uuid},T) => new SelectorUUID(T(uuid)),
-  selector: ({spec},{T}) => T(spec).format(),
+  selector_uuid: ({ uuid }, T) => new SelectorUUID(T(uuid)),
+  selector: ({ spec }, { T }) => T(spec).format(),
   selector_single: ({ spec }, { T, toNbt }) => {
     const it = T(spec);
-    assert(it.isSingle,"Selector must select a single entity")
+    assert(it.isSingle, "Selector must select a single entity")
     return it.format();
   },
   selector_optional: ({ spec }, { T, toNbt }) => {
@@ -110,7 +110,7 @@ const transformers = exports.transformers = {
   test_block: ({ spec }, { T }) => `block ~ ~ ~ ${T(spec)}`,
   test_block_pos: ({ pos, spec }, { T }) => `block ${T(pos)} ${T(spec)}`,
   test_predicate: ({ resloc }, { T }) => `predicate ${T(resloc)}`,
-  resname: ({parts},{T}) => parts.map(T).join("/"),
+  resname: ({ parts }, { T }) => parts.map(T).join("/"),
   resloc(node, { T, ns }) {
     return (node.ns ? T(node.ns) : ns) + ":" + T(node.name);
   },
@@ -118,10 +118,10 @@ const transformers = exports.transformers = {
     return (node.ns ? T(node.ns) : "minecraft") + ":" + T(node.name);
   },
   restag(node, { T, ns }) {
-    return '#'+(node.ns ? T(node.ns) : ns) + ":" + T(node.name);
+    return '#' + (node.ns ? T(node.ns) : ns) + ":" + T(node.name);
   },
   restag_mc(node, { T }) {
-    return '#'+(node.ns ? T(node.ns) : "minecraft") + ":" + T(node.name);
+    return '#' + (node.ns ? T(node.ns) : "minecraft") + ":" + T(node.name);
   },
   execute(node, { T }) {
     return "execute " + node.mods.map(T).join(" ") + " run " + T(node.code)
@@ -148,15 +148,15 @@ const transformers = exports.transformers = {
       ])}`
     ])
   },
-  
+
   cmd_give: ({ selector, count, item }, { toNbt, T }) => {
-    return `give ${T(selector)} ${T(item)} ${toNbt(count??1)}`
+    return `give ${T(selector)} ${T(item)} ${toNbt(count ?? 1)}`
   },
   cmd_clear: ({ selector, count, item }, { toNbt, T }) => {
     count = count ? toNbt(count) : "";
     return `clear ${T(selector)} ${T(item)} ${count}`
   },
-  cmd_after: ({ time, unit, statements,then }, { T, anonFunction, toNbt }) => {
+  cmd_after: ({ time, unit, statements, then }, { T, anonFunction, toNbt }) => {
     const lines = statements.map(T);
     if (then) lines.push(T(then));
     const fn = anonFunction(lines)
@@ -172,16 +172,19 @@ const transformers = exports.transformers = {
   score_id: ({ holder, id }, { T, scoreObjective }) => `${T(holder)} ${scoreObjective(T(id))}`,
   constant_id: ({ value }, { constantId, Nbt }) => constantId(Nbt(value)),
 
-  datapath: ({ head, path }, { T }) => `${T(head)} ${T(path)}`,
-
-  datapath_var: ({ path }, { T, ns }) => `storage ${ns}:zzz_minity_vars ${T(path)}`,
-  datahead_entity: ({ selector }, { T }) => `entity ${T(selector)}`,
-  datahead_storage: ({ name }, { T }) => `storage ${T(name)}`,
-  datahead_block: ({ position }, { T }) => `block ${T(position)}`,
-  datapath_modify_datapath: ({ modify, left, right }, { T }) => `data modify ${T(left)} ${modify} from ${T(right)}`,
-  datapath_modify_value: ({ modify, left, right }, { toNbt, T }) => {
-    return `data modify ${T(left)} ${modify} value ${toNbt(T(right))}`
+  datapath: ({ spec }, { T }) => {
+    const {type,id,path}=T(spec);
+    return `${type} ${id} ${path}`
   },
+  datapath_var: ({ path }, { T, ns }) => ({ type: "storage", id: `${ns}:zzz_minity_vars`, path: T(path) }),
+  datapath_storage: ({ name, path }, { T }) => ({ type: "storage", id: T(name), path: T(path) }),
+  datapath_entity: ({ selector, path }, { T }) => ({ type: "entity", id: T(selector), path: T(path) }),
+  datapath_block: ({ position, path }, { T }) => ({ type: "block", id: T(position), path: T(path) }),
+
+  datapath_modify_datapath: ({ modify, left, right }, { T }) => `data modify ${T(left)} ${modify} from ${T(right)}`,
+  datapath_insert_datapath: ({ index, left, right }, { T }) => `data modify ${T(left)} insert ${T(index)} from ${T(right)}`,
+  datapath_modify_value: ({ modify, left, right }, { toNbt, T }) => `data modify ${T(left)} ${modify} value ${toNbt(T(right))}`,
+  datapath_insert_value: ({ index, left, right }, { toNbt, T }) => `data modify ${T(left)} insert ${T(index)} value ${toNbt(T(right))}`,
   datapath_modify_execute: ({ modify, scale, left, right }, { T, addBlock }) => "function " + addBlock([
     [
       `data modify ${T(left)} ${modify} value 0`,
@@ -191,10 +194,10 @@ const transformers = exports.transformers = {
   print: ({ selector, line }, { T }) => {
     return "tellraw " + (selector ? T(selector) : "@s") + " " + JSON.stringify(T(line));
   },
-  raw_line:({parts},{T}) => parts.map(T),
+  raw_line: ({ parts }, { T }) => parts.map(T),
   delete_datapath: ({ path }, { T }) => `data remove ${T(path)}`,
   template_chars: ({ chars }) => chars,
-  template_parts: ({ parts }, { T }) =>  parts.map(T).join(""),
+  template_parts: ({ parts }, { T }) => parts.map(T).join(""),
   template_expand_arg: ({ name }, { toNbt, Nbt, getArg }) => Nbt(getArg(Nbt(name))),
   template_expand_tag: ({ name }, { T, tagId }) => tagId(T(name)),
   template_expand_var: ({ name }, { T, varId }) => varId(T(name)),
@@ -205,20 +208,109 @@ const transformers = exports.transformers = {
   template_expand_score_id: ({ id }, { T }) => (T(id)),
   template_expand_selector: ({ selector }, { T }) => T(selector),
 
-  raw_expand_var: ({ name }, { T, Nbt, varObjective,varName}) => Nbt({
-    score:{
+  raw_expand_var: ({ name }, { T, Nbt, varObjective, varName }) => Nbt({
+    score: {
       objective: varObjective(T(name)),
       name: varName(T(name)),
     }
   }),
-  raw_expand_score_id: ({ holder, id }, { T, Nbt, scoreObjective}) => Nbt({
-    score:{
+  raw_expand_score_id: ({ holder, id }, { T, Nbt, scoreObjective }) => Nbt({
+    score: {
       objective: scoreObjective(T(id)),
       name: Nbt(T(holder)),
     }
   }),
+  raw_expand_nbt: ({spec},{T}) => {
+    const {type,id,path}=T(spec);
+    return {
+      [type]:id,
+      nbt:path,
+    }
+  },
   ident(node) {
     return node.ident;
+  },
+  assignment_scale: ({ scale }, { T, Nbt }) => {
+    if (!scale) return `int 1`;
+    scale = Nbt(scale);
+    const type = { s: "short", i: "int", b: "byte", l: "long", d: "double", f: "float" }[scale.suffix || "i"]
+    return `${type} ${scale}`;
+  },
+  assignment_bossbar_prop: ({ id,prop }, { T }) => `${T(id)} ${prop}`,
+  assignment_scoreboard: ({type,left,right,scale},{T}) => {
+    switch (type) {
+      case 'value':
+        return `scoreboard players set ${T(left)} ${T(right)}`
+      case 'scoreboard':
+        return `scoreboard players operation ${T(left)} = ${T(right)}`
+      case 'test':
+        return `execute store result score ${T(left)} ${T(right)}`
+      case 'statement':
+        return `execute store result score ${T(left)} run ${T(right)}`
+      case 'bossbar':
+        return `execute store result score ${T(left)} run bossbar get ${T(right)}`
+      case 'datapath':
+        return `execute store result score ${T(left)} run data get ${T(right)} ${T(scale)}`
+    }
+  },
+  assignment_datapath: ({type,left,right,scale},{T,toNbt}) => {
+    switch (type) {
+      case 'datapath':
+        return `data modify ${T(left)} set from ${T(right)}`
+      case 'value':
+        return `data modify ${T(left)} set value ${toNbt(right)}`
+      case 'test':
+        return `execute store result ${T(left)} ${T(scale)} ${T(right)}`
+      case 'scoreboard':
+        return `execute store result ${T(left)} ${T(scale)} run scoreboard players get ${T(right)}`
+      case 'statement':
+        return `execute store result ${T(left)} ${T(scale)} run ${T(right)}`
+      case 'bossbar':
+        return `execute store result ${T(left)} ${T(scale)} run bossbar get ${T(right)}`
+    }
+  },
+  assignment_bossbar: ({type,left,right,scale},{T,toNbt}) => {
+    switch (type) {
+      case 'datapath':
+        return `execute store result bossbar ${T(left)} run data get ${T(right)} ${T(scale)}`
+      case 'value':
+        return `bossbar set ${T(left)} ${T(right)}`
+      case 'keyword':
+        return `bossbar set ${T(left)} ${T(right)}`
+      case 'json':
+        return `bossbar set ${T(left)} ${JSON.stringify(T(right))}`
+      case 'scoreboard':
+        return `execute store result bossbar ${T(left)} run scoreboard players get ${T(right)}`
+      case 'test':
+        return `execute store result score ${T(left)} ${T(right)}`
+      case 'statement':
+        return `execute store result bossbar ${T(left)} ${T(scale)} run ${T(right)}`
+      case 'bossbar':
+        return `execute store result bossbar ${T(left)} ${T(scale)} run bossbar get ${T(right)}`
+    }
+  },
+  assignment_success: ({target,type,left,right },{T}) => {
+    let store, run;
+    switch (target) {
+      case 'datapath':
+        store = `T(left) byte 1`
+        break;
+      case 'bossbar':
+        store = `bossbar ${T(left)}`
+        break;
+      case 'scoreboard':
+        store = `score ${T(left)}`
+        break;
+    }
+    switch (type) {
+      case 'statement':
+        run = `run ${T(right)}`
+        break;
+      case 'test':
+        store = T(right)
+        break;
+    }
+    return `execute store success ${store} ${run}`
   },
   assign_scoreboard_value: ({ left, right }, { T }) => `scoreboard players set ${T(left)} ${T(right)}`,
   assign_scoreboard_add: ({ left, right }, { T }) => `scoreboard players add ${T(left)} ${T(right)}`,
@@ -229,29 +321,11 @@ const transformers = exports.transformers = {
   assign_scoreboard_operation({ left, op, right }, { T }) {
     return "scoreboard players operation " + T(left) + " " + op + " " + T(right);
   },
-  assign_execute: ({ left, right }, { T }) => `execute store result ${T(left)} run ${T(right)}`,
-  assign_success: ({ left, right }, { T }) => `execute store success ${T(left)} run ${T(right)}`,
-  assign_store_scoreboard: ({ id }, { T }) => `score ${T(id)}`,
-  assign_store_datapath: ({ path, scale}, { T, Nbt  }) => {
-    if (!scale) return `${T(path)} int 1`;
-    scale = Nbt(scale);
-    const type = {s:"short",i:"int",b:"byte",l:"long",d:"double",f:"float"}[scale.suffix||"i"]
-    return `${T(path)} ${type} ${scale}`;
-  },
-  assign_store_bossbar: ({ id, prop }, { T }) => `bossbar ${T(id)} ${prop}`,
   assign_run_scoreboard: ({ id }, { T }) => `scoreboard players get ${T(id)}`,
   assign_run_datapath: ({ path }, { T }) => `data get ${T(path)}`,
   assign_run_bossbar: ({ id }, { T }) => `bossbar get ${T(id)} ${prop}`,
   assign_run_statement: ({ statement }, { T }) => `${T(statement)}`,
   assign_run_conditions: ({ conds }, { T }) => `${T(conds)}`,
-
-  assign_bossbar_set: ({id, prop,value},{T})=>{
-    if (prop=='name') {
-      return `bossbar set ${T(id)} ${prop} ${JSON.stringify(T(value))}`
-    } else {
-      return `bossbar set ${T(id)} ${prop} ${T(value)}`
-    }
-  },
 
   test_entity: ({ selector }, { T }) => `entity ${T(selector)}`,
   test_datapath: ({ path }, { T }) => `data ${T(path)}`,
@@ -274,7 +348,7 @@ const transformers = exports.transformers = {
   nbt_path_list_match: ({ match }, { toNbt }) => `[${toNbt(match)}]`,
   nbt_path_match: ({ match }, { toNbt }) => `${toNbt(match)}`,
   tilde: ({ number }) => `~${number}`,
-  raw_tag: ({ tag, attr, parts }, { T, Nbt, toNbt },state={block:true,first:true,last:true}) => {
+  raw_tag: ({ tag, attr, parts }, { T, Nbt, toNbt }, state = { block: true, first: true, last: true }) => {
     var props = {};
     var block = false, paragraph = false;
     var attrs = {};
@@ -283,54 +357,54 @@ const transformers = exports.transformers = {
     }
     const spec = rawTags[tag];
     if (!spec) {
-      props = {...attrs} 
+      props = { ...attrs }
     } else {
       block = spec.block;
       paragraph = spec.paragraph;
       if (typeof spec.props === "function") {
         props = spec.props(attrs)
       } else {
-        props = {...attrs, ...spec.props}
+        props = { ...attrs, ...spec.props }
       }
     }
     const ret = Nbt({ ...props })
-    
+
     ret.text ??= "";
-    
+
     if (parts) {
-      const mystate = Object.assign({},state)
+      const mystate = Object.assign({}, state)
       ret.extra = [];
       for (const i in parts) {
         mystate.first = i == 0;
-        mystate.last = i == parts.length-1;
-        ret.extra.push(T(parts[i],mystate))
+        mystate.last = i == parts.length - 1;
+        ret.extra.push(T(parts[i], mystate))
       }
     }
     if (paragraph) {
       state.block = true;
       if (!state.block && (!state.last)) {
-        return ["\n",Nbt(ret),"\n\n"]
+        return ["\n", Nbt(ret), "\n\n"]
       } else if (!state.last) {
-        return [Nbt(ret),"\n\n"]
-      } 
+        return [Nbt(ret), "\n\n"]
+      }
     } else if (block) {
       state.block = true;
       if (!state.block && (!state.last)) {
-        return ["\n",Nbt(ret),"\n"]
+        return ["\n", Nbt(ret), "\n"]
       } else if (!state.last) {
-        return [Nbt(ret),"\n"]
-      } 
-    } 
+        return [Nbt(ret), "\n"]
+      }
+    }
     return Nbt(ret);
   },
-  raw_chars: ({ chars }, { Nbt },state) => {
-    if (state.first) chars=chars.trimStart();
-    if (state.last) chars=chars.trimEnd();
+  raw_chars: ({ chars }, { Nbt }, state) => {
+    if (state.first) chars = chars.trimStart();
+    if (state.last) chars = chars.trimEnd();
     state.block = false;
     return Nbt(chars)
   },
-  raw_chars_ws: ({ chars }, { Nbt },state) => {
-    if (state.last||state.first) {
+  raw_chars_ws: ({ chars }, { Nbt }, state) => {
+    if (state.last || state.first) {
       return ""
     }
     if (!state.block) {
@@ -340,8 +414,8 @@ const transformers = exports.transformers = {
     return ""
   },
 
-  bossbar_add: ({id,name},{T,Nbt})=>`bossbar add ${T(id)} ${JSON.stringify(Nbt(name))}`,
-  bossbar_remove: ({id},{T,toNbt})=>`bossbar remove ${T(id)}`,
+  bossbar_add: ({ id, name }, { T, Nbt }) => `bossbar add ${T(id)} ${JSON.stringify(Nbt(name))}`,
+  bossbar_remove: ({ id }, { T, toNbt }) => `bossbar remove ${T(id)}`,
 
   /************************************************************************* */
   Execution: ({ modifiers, executable }, { T }) => `execute ${modifiers.map(T).join(" ")} ${T(executable)}`,
@@ -350,7 +424,7 @@ const transformers = exports.transformers = {
   ModifierNative: ({ MOD, arg }, { T }) => `${MOD} ${T(arg)}`,
   ModifierNativeLiteral: ({ MOD, ARG }, { T }) => `${MOD} ${ARG}`,
   ModifierFor: ({ arg }, { T }) => `as ${T(arg)} at @s`,
-  ModifierFacing: ({ selector, anchor }, { T }) => `facing entity ${T(selector)} ${anchor||'eyes'}`,
+  ModifierFacing: ({ selector, anchor }, { T }) => `facing entity ${T(selector)} ${anchor || 'eyes'}`,
   StructureIfElse: ({ arg, then, otherwise }, { T, anonFunction, ifElse }) => (
     otherwise
       ? anonFunction(ifElse(T(arg), T(then), T(otherwise)))
@@ -383,8 +457,8 @@ const transformers = exports.transformers = {
   NativeCoords: ({ x, y, z }, { T }) => `${T(x)} ${T(y)} ${T(z)}`,
   TildeCoord: ({ arg }, { T }) => arg ? `~${T(arg)}` : '~',
   CaretCoord: ({ arg }, { T }) => arg ? `^${T(arg)}` : '^',
-  StructureRepeat: ({ mods=[], statements=[], conds, then }, { T, ifElse, anonFunction, addBlock, ns }) => {
-    const MODS = (mods||[]).map(T).join(" ");
+  StructureRepeat: ({ mods = [], statements = [], conds, then }, { T, ifElse, anonFunction, addBlock, ns }) => {
+    const MODS = (mods || []).map(T).join(" ");
     const CONDS = T(conds);
     if (!then) {
       const block = addBlock(statements.map(T));
@@ -394,11 +468,11 @@ const transformers = exports.transformers = {
       const block = addBlock([]);
       block._content = [
         `execute ${MODS} run ` + anonFunction([
-          ...(statements||[]).map(T),
-          ...ifElse(CONDS,`function ${block.resloc}`,T(then))
+          ...(statements || []).map(T),
+          ...ifElse(CONDS, `function ${block.resloc}`, T(then))
         ])
       ];
-      return "function "+block.resloc
+      return "function " + block.resloc
     }
   },
   every_until: ({ statements, conds, then, time, unit }, { T, Nbt, addBlock, anonFunction, ifElse }) => {
@@ -417,11 +491,11 @@ const transformers = exports.transformers = {
       const block = addBlock([]);
       block._content = [
         anonFunction([
-          ...(statements||[]).map(T),
-          ...ifElse(T(conds),`schedule function ${block.resloc} ${Nbt(time)}${unit}`,T(then))
+          ...(statements || []).map(T),
+          ...ifElse(T(conds), `schedule function ${block.resloc} ${Nbt(time)}${unit}`, T(then))
         ])
       ];
-      return "function "+block.resloc
+      return "function " + block.resloc
     }
   },
   BlockArgThen: ({ }, { args }) => {
@@ -429,22 +503,22 @@ const transformers = exports.transformers = {
     return ret;
   },
   BlockArgElse: ({ }, { args }) => args[Symbol.for("BlockArgElse")](),
-  assign_arg:({name,value},{setArg,Nbt}) => {
-    setArg(name,Nbt(value));
+  assign_arg: ({ name, value }, { setArg, Nbt }) => {
+    setArg(name, Nbt(value));
     return "";
   },
-  FunctionTagCall:({restag }, { T }) =>  `function ${T(restag)}`,
-  MacroCall:(
-      {ns, name, args, then, otherwise }, 
-      { T, Nbt, macroExists, expandMacro, getMacro, ns:NS }
-    ) => {
-    if (macroExists(ns,name)) {
+  FunctionTagCall: ({ restag }, { T }) => `function ${T(restag)}`,
+  MacroCall: (
+    { ns, name, args, then, otherwise },
+    { T, Nbt, macroExists, expandMacro, getMacro, ns: NS }
+  ) => {
+    if (macroExists(ns, name)) {
 
       // this is a macro?
 
-      const macro = getMacro(ns,name);
+      const macro = getMacro(ns, name);
       const new_args = {};
-      
+
       const named = args?.named || {};
       const numbered = args?.numbered || [];
 
@@ -462,22 +536,22 @@ const transformers = exports.transformers = {
       }
       const thenCode = new_args[Symbol.for("BlockArgThen")] = () => then ? T(then) : ""
       const elseCode = new_args[Symbol.for("BlockArgElse")] = () => otherwise ? T(otherwise) : ""
-      return "function " + expandMacro(ns,name, new_args).resloc
+      return "function " + expandMacro(ns, name, new_args).resloc
     }
     // not a macro, so maybe an ordinary function call, with no arguments?
     if (!args && !then && !otherwise) {
-      return `function ${ns||NS}:${name}`;
+      return `function ${ns || NS}:${name}`;
     }
     // neither, so it's an error
-    assert(false,`no such macro ${ns||NS}:${name}`)
+    assert(false, `no such macro ${ns || NS}:${name}`)
   },
-  arg:({name}, { getArg }) => getArg(name),
-  MacroCallSpec:(
-    {ns, name, args, then, otherwise }, 
-    { T, Nbt, macroExists, expandMacro, getMacro, ns:NS }
+  arg: ({ name }, { getArg }) => getArg(name),
+  MacroCallSpec: (
+    { ns, name, args, then, otherwise },
+    { T, Nbt, macroExists, expandMacro, getMacro, ns: NS }
   ) => {
-    assert(macroExists(ns,name),`no such macro ${ns||NS}:${name}`)
-    const macro = getMacro(ns,name);
+    assert(macroExists(ns, name), `no such macro ${ns || NS}:${name}`)
+    const macro = getMacro(ns, name);
     const new_args = {};
     const named = args?.named || {};
     const numbered = args?.numbered || [];
@@ -493,25 +567,25 @@ const transformers = exports.transformers = {
         throw new Error("arg " + name + " in macro " + macro.name + " is not optional")
       }
     }
-    return {ns,name,args:new_args};
+    return { ns, name, args: new_args };
   },
-  PromiseTrue:({spec},{expandMacro,T},{thenCode,catchCode}) => {
-    const {ns,name,args} = T(spec);
+  PromiseTrue: ({ spec }, { expandMacro, T }, { thenCode, catchCode }) => {
+    const { ns, name, args } = T(spec);
     args[Symbol.for("BlockArgThen")] = () => thenCode;
     args[Symbol.for("BlockArgElse")] = () => catchCode;
-    return "function " + expandMacro(ns,name, args).resloc
+    return "function " + expandMacro(ns, name, args).resloc
   },
-  PromiseFalse:({spec},{expandMacro,T},{thenCode,catchCode}) => {
-    const {ns,name,args} = T(spec);
+  PromiseFalse: ({ spec }, { expandMacro, T }, { thenCode, catchCode }) => {
+    const { ns, name, args } = T(spec);
     args[Symbol.for("BlockArgThen")] = () => catchCode;
     args[Symbol.for("BlockArgElse")] = () => thenCode;
-    return "function " + expandMacro(ns,name, args).resloc
+    return "function " + expandMacro(ns, name, args).resloc
   },
-  PromiseCall:({promises,then,_catch},{anonFunction,T,O}) =>{
+  PromiseCall: ({ promises, then, _catch }, { anonFunction, T, O }) => {
     let thenCode = T(then);
     const catchCode = O(_catch);
     for (const promise of promises.concat().reverse()) {
-      thenCode = T(promise,{thenCode,catchCode})
+      thenCode = T(promise, { thenCode, catchCode })
     }
     return thenCode;
   }

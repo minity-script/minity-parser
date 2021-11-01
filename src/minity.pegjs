@@ -56,7 +56,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 
     macro_arg_default = EQUALS @macro_arg_literal
 
-    macro_arg_literal = value
+    macro_arg_literal = typed_value
 
   //\\ call_args
     call_args 
@@ -87,42 +87,118 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 //\\ assign
   assign 'assignment'
     = assign_arg
-    / assign_success
-    / assign_scoreboard 
-    / assign_datapath 
-    / assign_bossbar
-    / assign_execute
+    / assignment_success
+    / assignment_scoreboard 
+    / math_scoreboard
+    / assignment_datapath 
+    / assignment_bossbar
     / delete_datapath 
 
   declare 'declaration'
     = declare_var
     / declare_score
 
+  
+  
+  scale =  scale:(@typed_number _ "*" _)? {
+    return N('assignment_scale',{scale})
+  }
 
+  assignment_scoreboard 
+    = left:lhand_scoreboard EQUALS rhand:rhand_scoreboard {
+        return N('assignment_scoreboard',{left,...rhand})
+      }
+    / math_scoreboard
+
+  lhand_scoreboard
+    = var_id / score_id
+
+  rhand_scoreboard 
+    = right:lhand_scoreboard { return { type:'scoreboard',right } }
+    / right:bossbar_prop_int { return { type:'bossbar',right } }
+    / scale:scale right:datapath { return { type:'datapath',scale,right } }
+    / right:int !(_ "*") { return { type:'value', right } }
+    / right:Instruction { return { type:'statement',right } }
+    / "test" __ right:Conditionals { return { type:'test',right } }
+
+  assignment_datapath 
+    = left:datapath EQUALS rhand:rhand_datapath {
+        return N('assignment_datapath',{left,...rhand})
+      }
+
+  rhand_datapath 
+    = right:datapath { return { type:'datapath',right } }
+    / right:typed_value !(_ "*") { return { type:'value', right } }
+    / scale:scale right:lhand_scoreboard { return { type:'scoreboard',scale,right } }
+    / scale:scale right:bossbar_prop_int { return { type:'bossbar',scale,right } }
+    / scale:scale right:Instruction { return { type:'statement',scale,right } }
+    / scale:scale "test" __ right:Conditionals { return { type:'test', scale, right } }
+
+    assignment_bossbar 
+    = left:lhand_bossbar EQUALS rhand:rhand_bossbar {
+        return N('assignment_bossbar',{left,...rhand})
+      }
+    / left:bossbar_prop_json EQUALS right:value {
+        return N('assignment_bossbar',{left,type:'json',right})
+      }
+    / left:bossbar_prop_keyword EQUALS right:ident {
+        return N('assignment_bossbar',{left,type:'value',right})
+      }
+    / left:bossbar_prop_selector EQUALS right:selector {
+      return N('assignment_bossbar',{left,type:'value',right})
+    }
+
+    assignment_success
+      = lhand:lhand_success _ "?=" _ rhand:rhand_success {
+        return N('assignment_success',{...lhand,...rhand})
+      }
+
+    lhand_success 
+      = left:lhand_bossbar {
+          return {target:"bossbar",left}
+        }
+      / left: lhand_scoreboard {
+          return {target:"scoreboard",left}
+        }
+      / left: datapath {
+          return {target:"datapath",left}
+      }
+
+    rhand_success 
+      = scale:scale right:Instruction { return { type:'statement',scale,right } }
+      / scale:scale "test" __ right:Conditionals { return { type:'test', scale, right } }
+
+    bossbar_prop_int 
+      = "bossbar" __ id:resloc __ prop:("max"/"value"/"visible"/"players") {
+          return N('assignment_bossbar_prop',{id,prop})
+        }
+  
+    bossbar_prop_keyword
+    = "bossbar" __ id:resloc __ prop:("style"/"color") {
+        return N('assignment_bossbar_prop',{id,prop})
+      }
+    bossbar_prop_json
+    = "bossbar" __ id:resloc __ prop:("name") {
+        return N('assignment_bossbar_prop',{id,prop})
+      }
+    bossbar_prop_selector
+    = "bossbar" __ id:resloc __ prop:("players") {
+        return N('assignment_bossbar_prop',{id,prop})
+      }
+  
+    lhand_bossbar 
+    = "bossbar" __ id:resloc __ prop:("max"/"value"/"visible") {
+        return N('assignment_bossbar_prop',{id,prop})
+      }
+    
+    rhand_bossbar 
+      = rhand_scoreboard
+    
+    
   assign_arg = name:arg_name EQUALS value:value {
     return N('assign_arg',{name,value})
   }
 
-  assign_success
-    = left:assign_store_success right:assign_run {
-      return N('assign_success',{left,right}) 
-    }
-
-  assign_store_success
-    = id: scoreboard_id _ "?=" _ {
-        return N('assign_store_scoreboard',{id})
-      }
-    / path: datapath _ "?=" _ scale:(@number _"*" _ )? {
-        return N('assign_store_datapath',{path,scale})
-      }
-    / "bossbar" __ id:resloc __ prop:("value"/"max"/"visible") _ "?=" _{
-        return N('assign_store_bossbar',{id,prop})
-    }
-
-  assign_execute
-    = left:assign_store right:assign_run {
-        return N('assign_execute',{left,right}) 
-      }
 
   assign_store 
     = id: scoreboard_id EQUALS {
@@ -180,7 +256,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
           return N('template_chars', { chars:chars.join('') } )
         }
 
-  command_char 
+    command_char 
     	= no_expand_char_inline
       / &"{" !template_expand @"{"
 
@@ -258,7 +334,24 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       __ parts:command_parts {
       return N('cmd_say',{parts})
     }
-
+    / modify:("merge"/"append"/"prepend") __ left:datapath __ right:typed_value {
+        return N('datapath_modify_value',{modify,left,right})
+      }
+    / modify:("merge"/"append"/"prepend") __ left:datapath __ right:datapath {
+        return N('datapath_modify_datapath',{modify,left,right})
+      }
+    / modify:"insert"__ index:int __ left:datapath __ right:datapath {
+        return N('datapath_insert_datapath',{left,index,right})
+      }
+    / modify:"insert" __ index:int __ left:datapath __ right:typed_value {
+        return N('datapath_insert_value',{left,index,right})
+      }
+    / modify:"append" __ left:datapath __ scale:(_ @typed_number _ "*" _)? right:assign_run {
+        return N('datapath_modify_execute',{modify,left,right,index:-1, scale})
+      }
+    / modify:"prepend" __ left:datapath __ scale:(_ @typed_number _ "*" _)? right:assign_run {
+        return N('datapath_modify_execute',{modify,left,right,index:0, scale})
+      }
   builtin
    =  "import" 
       __ file:string {
@@ -266,7 +359,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       } 
     / print
     
-
+    
 
 
 //\\ execute
@@ -607,13 +700,10 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     = $([a-z]i [a-z0-9.:_-]i )+
   
   //\\ assign_scoreboard
-    assign_scoreboard
+    math_scoreboard
       = left:scoreboard_lhand _ 
           assign: (
-            "=" _ right: number {
-              return N('assign_scoreboard_value', { right } )
-            }
-          / op:"+=" _ right:int {
+            op:"+=" _ right:int {
               return N('assign_scoreboard_add', { right } )
             }
           / op:"-=" _ right:int {
@@ -641,8 +731,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       
 
     assign_scoreboard_op 
-      = "="
-      / "+="
+      = "+="
       / "-="
       / "*="
       / "/="
@@ -679,33 +768,35 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 
 //\\ nbt
   //\\ datapath
-    datapath 
-      = head:datahead "::" path:nbt_path {
-          return N('datapath', { head, path } )
-        } 
+    datapath
+      = spec:datapath_spec {
+        return N('datapath',{spec})
+      }
+    datapath_spec
+      = datapath_storage
       / datapath_var
+      / datapath_entity
+      / datapath_block
 
-    datahead 
-      = datahead_entity
-      / datahead_storage
-
-    datahead_entity 
-      = selector:selector {
-          return N('datahead_entity', { selector } )
+    datapath_entity 
+      = selector:selector "::" path:nbt_path {
+          return N('datapath_entity', { selector, path } )
         }
 
-    datahead_storage 
-      ="@@" name:resloc {
-          return N('datahead_storage', { name } )
+    datapath_storage 
+      ="@@" name:resloc "::" path:nbt_path {
+          return N('datapath_storage', { name, path } )
         }
 
-    datahead_block 
-      =position:Position {
-          return N('datahead_block', { position } )
+    datapath_block 
+      =position:Position "::" path:nbt_path {
+          return N('datapath_block', { position,path } )
         }
+
     datapath_var 
       = "@@" path:nbt_path { return N('datapath_var', { path } ) }
 
+    
   //\\ nbt_path
     nbt_path = head:nbt_path_head tail:nbt_path_tail* {
       return N('nbt_path',{path:[head,...tail]})
@@ -772,26 +863,15 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 
   //\\ assign_datapath
     assign_datapath 
-      = modify:("merge"/"append"/"prepend") __ left:datapath __ right:datapath {
-          return N('datapath_modify_datapath',{modify,left,right})
-        }
-      /  modify:("merge"/"append"/"prepend") __ left:datapath __ right:typed_value {
-          return N('datapath_modify_value',{modify,left,right})
-        }
-      / modify:"append" __ left:datapath __ scale:(_ @typed_number _ "*" _)? right:assign_run {
-          return N('datapath_modify_execute',{modify,left,right,index:-1, scale})
-        }
-      / modify:"prepend" __ left:datapath __ scale:(_ @typed_number _ "*" _)? right:assign_run {
-          return N('datapath_modify_execute',{modify,left,right,index:0, scale})
-        }
-      / left:datapath EQUALS  right:datapath  {
+      = left:datapath EQUALS  right:datapath  {
           return N('datapath_modify_datapath', {modify: 'set', left, right } )
         }
       / left:datapath EQUALS  right:typed_value !(_ "*") {
           return N('datapath_modify_value', {modify: 'set', left, right } )
         }
       
-
+    
+      
  
 
     delete_datapath 
@@ -918,7 +998,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     / string
 
 
-  typed_value
+  typed_value "typed value"
     = typed_value_arg
     / typed_value_lit
 
@@ -958,17 +1038,17 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 
 
     object_lit
-      = BEGIN
+      = "{" ___
         members:(
           head:member tail:(COMMA @member)* COMMA? {
             return [head,...tail];
           }
         )?
-        END
+        ___ "}"
         { return N('object_lit', { type:'object',members:members||[] } ) }
     member
       = name:(string) _":" ___ value:typed_value {
-          return { name: name, value: value };
+          return { name: name, value: value }
         }
 
 
@@ -1208,6 +1288,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       = "{->" name:template_parts "}" {
           return N('template_expand_score', { name } )
         }
+
     template_expand_score_id  
       = "{" id:score_id "}" {
           return N('template_expand_score_id', { id } )
@@ -1218,10 +1299,11 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
           return N('template_expand_selector', { selector } )
         }
 	
-      template_expand_coords
+    template_expand_coords
       = "{" &"(" coords:(@Position/&{expected('coordinates')}) "}" {
           return N('template_expand_coords', { coords } )
         }
+        
     
   //\\ string_json
     string_json 
@@ -1349,14 +1431,17 @@ raw_part
     return N('raw_chars',{chars})
   }
 
- raw_char 
-  = ![{] @char
-  / @"{" ![.?$@(]
-  / "\\" @.
+  raw_char 
+    = no_expand_char
+    / &"{" !raw_expand @"{"
+
+
  raw_expand
   = template_expand_arg
   / raw_expand_var
   / raw_expand_score_id
+  / raw_expand_nbt
+  / template_expand_value
   / template_expand_tag
   / template_expand_score
   / template_expand_selector
@@ -1367,10 +1452,17 @@ raw_part
         return N('raw_expand_var', { name } )
       }
   
+  raw_expand_nbt
+    = "{" spec:datapath_spec "}" {
+      return N('raw_expand_nbt', { spec } )
+    }
+
+
   raw_expand_score_id  
     = "{" holder:score_holder _ "->" _ id:score_objective "}" {
         return N('raw_expand_score_id', { holder, id } )
       }
+
 
 //\\ TOKENS
   COMMA = ___ "," ___
