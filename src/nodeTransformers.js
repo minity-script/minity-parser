@@ -293,7 +293,7 @@ const transformers = exports.transformers = {
     let store, run;
     switch (target) {
       case 'datapath':
-        store = `T(left) byte 1`
+        store = `${T(left)} byte 1`
         break;
       case 'bossbar':
         store = `bossbar ${T(left)}`
@@ -307,9 +307,10 @@ const transformers = exports.transformers = {
         run = `run ${T(right)}`
         break;
       case 'test':
-        store = T(right)
+        run = T(right)
         break;
     }
+    console.log({target,type,store,run})
     return `execute store success ${store} ${run}`
   },
   assign_scoreboard_value: ({ left, right }, { T }) => `scoreboard players set ${T(left)} ${T(right)}`,

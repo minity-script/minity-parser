@@ -128,12 +128,12 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 
   rhand_datapath 
     = right:datapath { return { type:'datapath',right } }
+    / scale:scale "test" __ right:Conditionals { return { type:'test', scale, right } }
     / right:typed_value !(_ "*") { return { type:'value', right } }
     / scale:scale right:lhand_scoreboard { return { type:'scoreboard',scale,right } }
     / scale:scale right:bossbar_prop_int { return { type:'bossbar',scale,right } }
     / scale:scale right:Instruction { return { type:'statement',scale,right } }
-    / scale:scale "test" __ right:Conditionals { return { type:'test', scale, right } }
-
+    
     assignment_bossbar 
     = left:lhand_bossbar EQUALS rhand:rhand_bossbar {
         return N('assignment_bossbar',{left,...rhand})
@@ -165,8 +165,8 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       }
 
     rhand_success 
-      = scale:scale right:Instruction { return { type:'statement',scale,right } }
-      / scale:scale "test" __ right:Conditionals { return { type:'test', scale, right } }
+      = right:Instruction { return { type:'statement',right } }
+      / "test" __ right:Conditionals { return { type:'test', right } }
 
     bossbar_prop_int 
       = "bossbar" __ id:resloc __ prop:("max"/"value"/"visible"/"players") {
