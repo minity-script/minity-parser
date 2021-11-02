@@ -132,14 +132,17 @@ const Frame = exports.Frame =
       for (const { axis, d, f } of coords) ret[axis] += f * this.T(d);
       return ret;
     }
-
+    /*
     addJson = (parts, value) => {
       this.result.addJson(parts, value);
-    }
+    }*/
     addFunctionTag = (ns, tag, fn) => {
       this.result.addJson(ns, ["tags", "functions", tag], {
         values: [fn]
       })
+    }
+    defineJson = (ns, name, value) => {
+      this.result.addJson(ns, [name], value)
     }
     constantId = value => {
       const constant = this.result.addConstant(value);

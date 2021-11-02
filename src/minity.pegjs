@@ -26,9 +26,9 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
   global 
     = DeclareFunction
     / DeclareMacro
-    / Statement
     / DeclareEvent
-
+    / Directive
+    / Statement
 
   DeclareEvent 
     = "on" 
@@ -37,10 +37,17 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
         return N('DeclareEvent',{trigger,conditions,then})
       }
 
-//\\ macro
+
+//\\ compile-time constant
 
   arg_name 'macro argument'
-    = "?" @WORD
+  = "?" @WORD
+  arg_value = typed_value
+//\\ define macro
+
+  DeclareMacro = "macro" __ name:DeclareName args:macro_args statements:Braces {
+      return N('DeclareMacro', { name,args,statements } )
+    }
 
   //\\ macro_args
     macro_args = OPEN head:macro_arg tail:(COMMA @macro_arg)* CLOSE {
@@ -50,14 +57,21 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       return []
     }
 
-    macro_arg = name:arg_name def:macro_arg_default? {
+    macro_arg = name:arg_name def:(EQUALS @arg_value)? {
       return {name,def}
     }
 
-    macro_arg_default = EQUALS @macro_arg_literal
 
-    macro_arg_literal = typed_value
+  
 
+
+//\\ macro call
+
+  MacroCall
+  = ns:(@NAME ":")? name:NAME _ OPEN args:call_args? CLOSE {
+      return N('MacroCall', { ns, name, args } )
+    }
+      
   //\\ call_args
     call_args 
     = numbered:call_args_numbered named:(COMMA @call_args_named)? {
@@ -71,32 +85,47 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       return [head,...tail]
     }
 
-    call_arg_numbered = ___ value:macro_arg_literal  {
+    call_arg_numbered = ___ value:arg_value  {
       return value
-    } / & (COMMA)
+    } 
 
     call_args_named = head:call_arg_named tail:(COMMA @call_arg_named)* {
       return [head,...tail]
     }
 
-    call_arg_named = name:arg_name EQUALS value:macro_arg_literal {
+    call_arg_named = name:arg_name EQUALS value:arg_value {
       return {name,value}
     }
 
+//\\ declare
+  Declaration 'declaration'
+  = declare_var
+  / declare_score
+  / declare_tag
 
-//\\ assign
-  assign 'assignment'
-    = assign_arg
-    / assignment_success
-    / assignment_scoreboard 
-    / math_scoreboard
-    / assignment_datapath 
-    / assignment_bossbar
-    / delete_datapath 
+    declare_tag 
+      = "tag" __ name:ident_lit {
+        return N('declare_tag',{name})
+      }
+  
+    declare_var 
+      = "var" __ name:var_name value:(EQUALS @int)? {
+          return N('declare_var',{name,value})
+        }
+  
+    declare_score 
+      = "score" __ name:IDENT criterion:(__ @score_criterion)? {
+        return N('declare_score',{name,criterion})
+      }
+//\\ assignment
+  Assignment 'assignment'
+  = AssignmentArg
+  / AssignmentSuccess
+  / AssignmentScoreboard 
+  / math_scoreboard
+  / AssignmentDatapath 
+  / AssignmentBossbar
 
-  declare 'declaration'
-    = declare_var
-    / declare_score
 
   
   
@@ -104,75 +133,63 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     return N('assignment_scale',{scale})
   }
 
-  assignment_scoreboard 
+  AssignmentScoreboard 
     = left:lhand_scoreboard EQUALS rhand:rhand_scoreboard {
-        return N('assignment_scoreboard',{left,...rhand})
+        return N('AssignmentScoreboard',{left,...rhand})
       }
     / math_scoreboard
 
-  lhand_scoreboard
-    = var_id / score_id
+    lhand_scoreboard
+      = var_id / score_id
 
-  rhand_scoreboard 
-    = right:lhand_scoreboard { return { type:'scoreboard',right } }
-    / right:bossbar_prop_int { return { type:'bossbar',right } }
-    / scale:scale right:datapath { return { type:'datapath',scale,right } }
-    / right:int !(_ "*") { return { type:'value', right } }
-    / right:Instruction { return { type:'statement',right } }
-    / "test" __ right:Conditionals { return { type:'test',right } }
+    rhand_scoreboard 
+      = right:lhand_scoreboard { return { type:'scoreboard',right } }
+      / right:bossbar_prop_int { return { type:'bossbar',right } }
+      / scale:scale right:datapath { return { type:'datapath',scale,right } }
+      / right:int !(_ "*") { return { type:'value', right } }
+      / right:Instructable { return { type:'statement',right } }
+      / "test" __ right:Conditionals { return { type:'test',right } }
 
-  assignment_datapath 
+  AssignmentDatapath 
     = left:datapath EQUALS rhand:rhand_datapath {
-        return N('assignment_datapath',{left,...rhand})
+        return N('AssignmentDatapath',{left,...rhand})
       }
 
-  rhand_datapath 
-    = right:datapath { return { type:'datapath',right } }
-    / scale:scale "test" __ right:Conditionals { return { type:'test', scale, right } }
-    / right:typed_value !(_ "*") { return { type:'value', right } }
-    / scale:scale right:lhand_scoreboard { return { type:'scoreboard',scale,right } }
-    / scale:scale right:bossbar_prop_int { return { type:'bossbar',scale,right } }
-    / scale:scale right:Instruction { return { type:'statement',scale,right } }
+    rhand_datapath 
+      = right:datapath { return { type:'datapath',right } }
+      / scale:scale "test" __ right:Conditionals { return { type:'test', scale, right } }
+      / right:typed_value !(_ "*") { return { type:'value', right } }
+      / scale:scale right:lhand_scoreboard { return { type:'scoreboard',scale,right } }
+      / scale:scale right:bossbar_prop_int { return { type:'bossbar',scale,right } }
+      / scale:scale right:Instructable { return { type:'statement',scale,right } }
     
-    assignment_bossbar 
-    = left:lhand_bossbar EQUALS rhand:rhand_bossbar {
-        return N('assignment_bossbar',{left,...rhand})
+  AssignmentBossbar 
+    = left:bossbar_prop_bool EQUALS right:bool {
+        return N('AssignmentBossbar',{left,type:'value',right})
       }
     / left:bossbar_prop_json EQUALS right:value {
-        return N('assignment_bossbar',{left,type:'json',right})
+        return N('AssignmentBossbar',{left,type:'json',right})
       }
     / left:bossbar_prop_keyword EQUALS right:ident {
-        return N('assignment_bossbar',{left,type:'value',right})
+        return N('AssignmentBossbar',{left,type:'value',right})
       }
     / left:bossbar_prop_selector EQUALS right:selector {
-      return N('assignment_bossbar',{left,type:'value',right})
-    }
-
-    assignment_success
-      = lhand:lhand_success _ "?=" _ rhand:rhand_success {
-        return N('assignment_success',{...lhand,...rhand})
+      return N('AssignmentBossbar',{left,type:'value',right})
+    } 
+    / left:lhand_bossbar EQUALS rhand:rhand_bossbar {
+        return N('AssignmentBossbar',{left,...rhand})
       }
-
-    lhand_success 
-      = left:lhand_bossbar {
-          return {target:"bossbar",left}
+    
+    bossbar_prop_bool 
+      = "bossbar" __ id:resloc __ prop:("visible") {
+          return N('assignment_bossbar_prop',{id,prop})
         }
-      / left: lhand_scoreboard {
-          return {target:"scoreboard",left}
-        }
-      / left: datapath {
-          return {target:"datapath",left}
-      }
 
-    rhand_success 
-      = right:Instruction { return { type:'statement',right } }
-      / "test" __ right:Conditionals { return { type:'test', right } }
-
-    bossbar_prop_int 
+    bossbar_prop_int
       = "bossbar" __ id:resloc __ prop:("max"/"value"/"visible"/"players") {
           return N('assignment_bossbar_prop',{id,prop})
         }
-  
+
     bossbar_prop_keyword
     = "bossbar" __ id:resloc __ prop:("style"/"color") {
         return N('assignment_bossbar_prop',{id,prop})
@@ -192,185 +209,172 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       }
     
     rhand_bossbar 
-      = rhand_scoreboard
+      = rhand_scoreboard    
+
+  AssignmentSuccess
+    = lhand:lhand_success _ "?=" _ rhand:rhand_success {
+      return N('AssignmentSuccess',{...lhand,...rhand})
+    }
+
+    lhand_success 
+      = left:lhand_bossbar {
+          return {target:"bossbar",left}
+        }
+      / left: lhand_scoreboard {
+          return {target:"scoreboard",left}
+        }
+      / left: datapath {
+          return {target:"datapath",left}
+      }
+
+    rhand_success 
+      = right:Instructable { return { type:'statement',right } }
+      / "test" __ right:Conditionals { return { type:'test', right } }
+
+ 
     
     
-  assign_arg = name:arg_name EQUALS value:value {
-    return N('assign_arg',{name,value})
-  }
+  AssignmentArg 
+    = name:arg_name EQUALS value:value {
+      return N('AssignmentArg',{name,value})
+    }
 
 
-  assign_store 
-    = id: scoreboard_id EQUALS {
-        return N('assign_store_scoreboard',{id})
-      }
-    / path: datapath EQUALS scale:(@typed_number _"*" _ )? {
-        return N('assign_store_datapath',{path,scale})
-      }
-    / "bossbar" __ id:resloc __ prop:("value"/"max"/"visible") EQUALS {
-        return N('assign_store_bossbar',{id,prop})
-      }
-  
 
 
-  assign_run 
-    = statement:Instruction {
-        return N('assign_run_statement',{statement})
-      }
-      /id: scoreboard_id {
-          return N('assign_run_scoreboard',{id})
-        }
-      / path: datapath {
-          return N('assign_run_datapath',{path})
-        }
-      / "bossbar" __ id:resloc __ prop:("value"/"max"/"visible") {
-          return N('assign_run_bossbar',{id, prop})
-        }
-      / "test" __ conds:Conditionals {
-          return N('assign_run_test',{id, conds})
-      }
 
 
-//\\ print
-  print = "print" selector:(__ @selector)? __ line:raw_line {
-    return N('print',{selector,line})
-  }
 
- //\\ commands
+//\\ native commands
 
   command = "/" command:command_parts {
     return N('command', { command  } )
   }
 
   command_parts
-      = parts:command_part* {
-          return N('template_parts',{parts})
-        }
-
-    command_part
-      = template_expand
-      / command_chars
-
-    command_chars  
-      = chars:(@command_char)+ {
-          return N('template_chars', { chars:chars.join('') } )
-        }
-
-    command_char 
-    	= no_expand_char_inline
-      / &"{" !template_expand @"{"
-
-    cmd_arg_count_item 
-      = __
-        count: unsigned_int
-        __
-        item: item_spec {
-          return {count,item}
-        }
-      / __
-        item: item_spec 
-        count: ( __ @unsigned_int)? {
-          return {count,item}
-        }
-        
-
-    cmd 
-    = "summon" 
-      pos:(_ @Position)? 
-      __ 
-      type:resloc_mc CONCAT 
-      nbt:(@object)? 
-      then:(__ "then" __ @Instructions )? {
-        return N('cmd_summon', { pos,type,nbt, then } )
+    = parts:command_part* {
+        return N('template_parts',{parts})
       }
-    / "give" 
-      selector:cmd_arg_selector_optional 
-      args: cmd_arg_count_item {
-        return N('cmd_give', { selector,...args } )
+
+  command_part
+    = template_expand
+    / command_chars
+
+  command_chars  
+    = chars:(@command_char)+ {
+        return N('template_chars', { chars:chars.join('') } )
       }
-    / "clear" 
-      selector:cmd_arg_selector_optional 
-      args: cmd_arg_count_item {
-        return N('cmd_clear', { selector,...args } )
-      }
-    / "setblock" 
-      pos:(_ @Position)? 
+
+  command_char 
+    = no_expand_char_inline
+    / &"{" !template_expand @"{"
+
+  cmd_arg_count_item 
+    = __
+      count: unsigned_int
       __
-      block:block_spec 
-      mode: (__ @("destroy"/"keep"/"replace"))? {
-        return N('cmd_setblock', { pos, block, mode } )
+      item: item_spec {
+        return {count,item}
       }
-    / "after" __ time:float unit:[tds]? 
-      statements:Instructions 
-      then:(__ "then" @Instructable)? {
-        return N('cmd_after', { time, unit: (unit ?? "t"), statements, then } )
-      } 
-    / "bossbar" 
-      __ "add" 
-      __ id:resloc 
-      __ name:string? {
-        return N('bossbar_add', { id, name} )
+    / __
+      item: item_spec 
+      count: ( __ @unsigned_int)? {
+        return {count,item}
       }
-    / "bossbar" 
-      __ "remove" 
-      __ id:resloc {
-        return N('bossbar_remove', { id } )
-    } 
-    / "tag" 
-      __ selector:selector 
-      __ tag:tag_id  {
-        return N('tag_set',{selector,tag})
-      }
-    / "untag" 
-      __ selector:selector 
-      __ tag:tag_id  {
-        return N('tag_unset',{selector,tag})
-      }
-    / "tag" 
-      __ name:string {
-        return N('declare_tag',{name})
-      }
-    / "say" 
-      __ parts:command_parts {
-      return N('cmd_say',{parts})
+      
+//\\ minity commands
+  cmd 
+  = "summon" 
+    pos:(_ @Position)? 
+    __ 
+    type:resloc_mc CONCAT 
+    nbt:(@object)? 
+    then:(__ "then" __ @Instructions )? {
+      return N('cmd_summon', { pos,type,nbt, then } )
     }
-    / modify:("merge"/"append"/"prepend") __ left:datapath __ right:typed_value {
-        return N('datapath_modify_value',{modify,left,right})
-      }
-    / modify:("merge"/"append"/"prepend") __ left:datapath __ right:datapath {
-        return N('datapath_modify_datapath',{modify,left,right})
-      }
-    / modify:"insert"__ index:int __ left:datapath __ right:datapath {
-        return N('datapath_insert_datapath',{left,index,right})
-      }
-    / modify:"insert" __ index:int __ left:datapath __ right:typed_value {
-        return N('datapath_insert_value',{left,index,right})
-      }
-    / modify:"append" __ left:datapath __ scale:(_ @typed_number _ "*" _)? right:assign_run {
-        return N('datapath_modify_execute',{modify,left,right,index:-1, scale})
-      }
-    / modify:"prepend" __ left:datapath __ scale:(_ @typed_number _ "*" _)? right:assign_run {
-        return N('datapath_modify_execute',{modify,left,right,index:0, scale})
-      }
-  builtin
-   =  "import" 
-      __ file:string {
-        return N('import',{file})
-      } 
-    / print
+  / "give" 
+    selector:cmd_arg_selector_optional 
+    args: cmd_arg_count_item {
+      return N('cmd_give', { selector,...args } )
+    }
+  / "clear" 
+    selector:cmd_arg_selector_optional 
+    args: cmd_arg_count_item {
+      return N('cmd_clear', { selector,...args } )
+    }
+  / "setblock" 
+    pos:(_ @Position)? 
+    __
+    block:block_spec 
+    mode: (__ @("destroy"/"keep"/"replace"))? {
+      return N('cmd_setblock', { pos, block, mode } )
+    }
+  / "after" __ time:float unit:[tds]? 
+    statements:Instructions 
+    then:(__ "then" @Instruction)? {
+      return N('cmd_after', { time, unit: (unit ?? "t"), statements, then } )
+    } 
+  / "bossbar" 
+    __ "add" 
+    __ id:resloc 
+    __ name:string? {
+      return N('bossbar_add', { id, name} )
+    }
+  / "bossbar" 
+    __ "remove" 
+    __ id:resloc {
+      return N('bossbar_remove', { id } )
+  } 
+  / "tag" 
+    __ selector:selector 
+    __ tag:tag_id  {
+      return N('tag_set',{selector,tag})
+    }
+  / "untag" 
+    __ selector:selector 
+    __ tag:tag_id  {
+      return N('tag_unset',{selector,tag})
+    }
+  / "say" 
+    __ parts:command_parts {
+    return N('cmd_say',{parts})
+  }
+  / modify:("merge"/"append"/"prepend") __ left:datapath __ right:typed_value {
+      return N('datapath_modify_value',{modify,left,right})
+    }
+  / modify:("merge"/"append"/"prepend") __ left:datapath __ right:datapath {
+      return N('datapath_modify_datapath',{modify,left,right})
+    }
+  / modify:"insert"__ index:int __ left:datapath __ right:datapath {
+      return N('datapath_insert_datapath',{left,index,right})
+    }
+  / modify:"insert" __ index:int __ left:datapath __ right:typed_value {
+      return N('datapath_insert_value',{left,index,right})
+    }
+  / print
+  / delete_datapath 
+
+  //\\ print
+  print = "print" selector:(__ @selector)? __ line:raw_line {
+    return N('print',{selector,line})
+  }
+
+//\\ directives
+  Directive
+  =  "import" 
+    __ file:string {
+      return N('import',{file})
+    } 
+  / "define" __ resloc:resloc __ value:value {
+    return N('DefineJson',{resloc,value})
+  }
+    
     
     
 
 
 //\\ execute
-
-
-  
-  OPEN = _ "(" ___
-  CLOSE =  ___ ")"
-  BEGIN = _ "{" ___
-  END =  ___ "}"
-  
+ 
   mod_arg_axes 
     = OPEN @("xyz"/"xy"/"xz"/"yz"/"x"/"y"/"z") CLOSE
     / __ @("xyz"/"xy"/"xz"/"yz"/"x"/"y"/"z")
@@ -424,14 +428,13 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
   }
 
 //\\ selector
-  selector_single = spec:selector_spec {
-    return N('selector_single', { spec } )
-  }
   selector
     = spec: selector_spec {
       return N('selector', { spec } )
     }
-
+  selector_single = spec:selector_spec {
+      return N('selector_single', { spec } )
+    }
   selector_spec  'selector'
     = selector_uuid
     / selector_complex
@@ -447,7 +450,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     }
     
   //\\ sort
-    selector_sort 
+  selector_sort 
     = sort:sort_name __ "all" __ {
         return [N('cond_brackets_lit',{name:'sort',op:'include',value:sort})]
       }
@@ -617,47 +620,8 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       } 
     
 
-
-//\\ bossbar
-  //\\ bossbar assign
-  assign_bossbar
-    = "bossbar" __ id:resloc __ 
-    assign:(
-        prop:("name"/"style"/"color") EQUALS value:string {
-          return N('assign_bossbar_set', { prop, value } )
-        }
-      / prop:"players" EQUALS value:selector {
-          return N('assign_bossbar_set', { prop, value } )
-        }
-      / prop:("max"/"value") EQUALS value:int {
-          return N('assign_bossbar_set', { prop, value } )
-        }  
-      / prop:("visible") EQUALS value:bool {
-          return N('assign_bossbar_set', { prop, value } )
-        }  
-    ) {
-      assign.id = id;
-      return assign;
-    }
-
-  bossbar_id 
-    = name:resloc {
-      return N('bossbar_id',{name})
-    }
-//\\ tag
+ 
     
-  tag_id 
-    = name:string {
-      return N('tag_id',{name})
-    }
-
-  //\\ asign_tag
-    //\\ assign_scoreboard
-    assign_tag
-      = selector:selector "." tag:tag_id EQUALS right:bool {
-      		return N('assign_tag_value', { selector, tag, right } )
-      	}
-          
 
 //\\ scoreboard
   var_name 'variable'
@@ -674,7 +638,11 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     = holder:score_holder _ "->" _ id:score_objective {
       return N( 'score_id', { holder,id } )
     }
-
+   
+  tag_id 
+    = name:string {
+      return N('tag_id',{name})
+    }
   score_objective 'score objective'
     = string
 
@@ -686,15 +654,8 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     / constant_id 
     / score_id
 
-  declare_var 
-    = "var" __ name:var_name value:(EQUALS @int)? {
-        return N('declare_var',{name,value})
-      }
- 
-  declare_score 
-    = "score" __ name:IDENT criterion:(__ @score_criterion)? {
-      return N('declare_score',{name,criterion})
-    }
+
+  
   
   score_criterion 'criterion'
     = $([a-z]i [a-z0-9.:_-]i )+
@@ -772,105 +733,98 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       = spec:datapath_spec {
         return N('datapath',{spec})
       }
-    datapath_spec
-      = datapath_storage
-      / datapath_var
-      / datapath_entity
-      / datapath_block
+      datapath_spec
+        = datapath_storage
+        / datapath_var
+        / datapath_entity
+        / datapath_block
 
-    datapath_entity 
-      = selector:selector "::" path:nbt_path {
-          return N('datapath_entity', { selector, path } )
-        }
+      datapath_entity 
+        = selector:selector "::" path:nbt_path {
+            return N('datapath_entity', { selector, path } )
+          }
 
-    datapath_storage 
-      ="@@" name:resloc "::" path:nbt_path {
-          return N('datapath_storage', { name, path } )
-        }
+      datapath_storage 
+        ="@@" name:resloc "::" path:nbt_path {
+            return N('datapath_storage', { name, path } )
+          }
 
-    datapath_block 
-      =position:Position "::" path:nbt_path {
-          return N('datapath_block', { position,path } )
-        }
+      datapath_block 
+        =position:Position "::" path:nbt_path {
+            return N('datapath_block', { position,path } )
+          }
 
-    datapath_var 
+      datapath_var 
       = "@@" path:nbt_path { return N('datapath_var', { path } ) }
 
     
   //\\ nbt_path
-    nbt_path = head:nbt_path_head tail:nbt_path_tail* {
-      return N('nbt_path',{path:[head,...tail]})
-    }
+    nbt_path 
+      = head:nbt_path_head tail:nbt_path_tail* {
+          return N('nbt_path',{path:[head,...tail]})
+        }
 
-    nbt_path_head 
+      nbt_path_head 
         = nbt_path_root
         / nbt_path_match
         / nbt_path_bracket
 
-    nbt_path_tail 
-      = @nbt_path_member 
+      nbt_path_tail 
+        = @nbt_path_member 
         / nbt_path_bracket
 
-    nbt_path_root 
-    = member:nbt_path_step {
-        return N('nbt_path_root',member)
-      }
+      nbt_path_root 
+        = member:nbt_path_step {
+            return N('nbt_path_root',member)
+          }
 
 
-    nbt_path_member 
-      = "." member:nbt_path_step {
-        return N('nbt_path_member',member)
-      }
+      nbt_path_member 
+        = "." member:nbt_path_step {
+            return N('nbt_path_member',member)
+          }
 
-    nbt_path_step = name:string match:nbt_path_match? {
-      return {name,match}
-    }
+      nbt_path_step 
+        = name:string match:nbt_path_match? {
+            return {name,match}
+          }
+
+      nbt_path_part
+        = "{}"
+          / nbt_path_ident
+          / nbt_path_match
+          / nbt_path_bracket
+
+      nbt_path_bracket 
+        = nbt_path_list_match
+          / nbt_path_list
+          / nbt_path_list_element
+
+      nbt_path_list_element
+        = "[" index:int "]" {
+            return N('nbt_path_list_element',{index})
+          }
+
+      nbt_path_list
+        = "[]" {
+            return N('nbt_path_list')
+          }
 
 
-    nbt_path_part
-      = "{}"
-        / nbt_path_ident
-        / nbt_path_match
-        / nbt_path_bracket
-        
+      nbt_path_list_match 
+        = "[" match:object "]" {
+            return N('nbt_path_list_match',{match})
+          } 
 
-    nbt_path_bracket 
-      = nbt_path_list_match
-        / nbt_path_list
-        / nbt_path_list_element
+      nbt_path_match 
+        = match:object_lit {
+            return N('nbt_path_match',{match})
+          }
 
-    nbt_path_list_element
-      = "[" index:int "]" {
-          return N('nbt_path_list_element',{index})
-        }
-
-    nbt_path_list
-      = "[]" {
-          return N('nbt_path_list')
-        }
+      nbt_path_ident 
+        = string
 
 
-    nbt_path_list_match 
-      = "[" match:object "]" {
-          return N('nbt_path_list_match',{match})
-        } 
-
-    nbt_path_match = match:object_lit {
-        return N('nbt_path_match',{match})
-      }
-
-    nbt_path_ident = string
-
-  //\\ assign_datapath
-    assign_datapath 
-      = left:datapath EQUALS  right:datapath  {
-          return N('datapath_modify_datapath', {modify: 'set', left, right } )
-        }
-      / left:datapath EQUALS  right:typed_value !(_ "*") {
-          return N('datapath_modify_value', {modify: 'set', left, right } )
-        }
-      
-    
       
  
 
@@ -884,27 +838,24 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       } 
 
 //\\ block_spec
-
-  CONCAT = (_ "&" _)?
-
   block_spec 'block predicate'
     = resloc:resloc_or_tag_mc CONCAT states:block_states? CONCAT nbt:(@object)? {
         return N('block_spec',{resloc,states,nbt})
       }
 
-  block_states 
-    = "[" ___ head:block_state tail:( COMMA @block_state)* ___ "]" {
-        return N('block_states',{states:[head,...tail]})
-      }
-  block_state 
-    = name:ident EQUALS value:(number/string) {
-        return N('block_state',{name,value})
-      } 
+    block_states 
+      = "[" ___ head:block_state tail:( COMMA @block_state)* ___ "]" {
+          return N('block_states',{states:[head,...tail]})
+        }
+    block_state 
+      = name:ident EQUALS value:(number/string) {
+          return N('block_state',{name,value})
+        } 
 
-  item_spec 'item predicate'
-    = resloc:resloc_or_tag_mc CONCAT nbt:(@object)? {
-        return N('item_spec',{resloc,nbt})
-      }
+    item_spec 'item predicate'
+      = resloc:resloc_or_tag_mc CONCAT nbt:(@object)? {
+          return N('item_spec',{resloc,nbt})
+        }
 
 
 //\\ parts
@@ -1363,108 +1314,117 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     unescaped
       = [^\0-\x1F\\]
 
-LT = "<" _
-LTS = "</" _
-GT = ___ ">"
-SGT = ___ "/>"
 
-	raw_text 
-      = raw_text_arg
-      / raw_text_lit
-      
-    raw_text_lit
-      = raw_tag
+//\\ raw text
+  raw_text 
+    = raw_text_arg
+    / raw_text_lit
+    
+  raw_text_lit
+    = raw_tag
 
-    raw_text_arg 
-      = name:arg_name {
-          return N('arg', { type:'raw_text',name } ) 
+  raw_text_arg 
+    = name:arg_name {
+        return N('arg', { type:'raw_text',name } ) 
+      }
+  
+
+  raw_tag 
+    = open:raw_tag_open ___ GT
+      ___
+      parts:raw_part*
+      ___
+      close:(
+        tag:raw_tag_close {
+          if(tag == open.tag) return tag;
+          expected('</'+open.tag+'>')
+        }
+      ) { 
+        open.parts = parts;
+        return open;
+      }
+    / @raw_tag_open SGT 
+
+  raw_tag_open
+    = /*LT attr:(head:raw_attr tail:(___ @raw_attr)* { return [head,...tail] }) &(GT/SGT) {
+      const tag = N('raw_tag',{props:{}})
+      tag.attr = attr;
+      return tag;	
+      }
+    / */
+    !LTS LT tag:(WORD)  attr:(___ @raw_attr)* {
+      return N('raw_tag',{tag,attr});
+    }
+
+    raw_attr = name:ident EQUALS value:value {
+      return {name,value}
+    }
+
+  raw_tag_close
+    = LTS @WORD GT
+
+  raw_line = parts:(raw_tag/raw_expand/raw_chars)* {
+    return N('raw_line',{parts})
+  }
+
+  raw_part 
+    = raw_tag 
+    / raw_expand 
+    /  chars:$(EOL) {
+        return N('raw_chars_ws',{chars})
+      }
+    /  raw_chars
+
+  raw_chars = chars:$(!(LT) (raw_char))+ {
+      return N('raw_chars',{chars})
+    }
+
+    raw_char 
+      = no_expand_char
+      / &"{" !raw_expand @"{"
+
+
+  raw_expand
+    = template_expand_arg
+    / raw_expand_var
+    / raw_expand_score_id
+    / raw_expand_nbt
+    / template_expand_value
+    / template_expand_tag
+    / template_expand_score
+    / template_expand_selector
+    / template_expand_coords
+    
+    raw_expand_var  
+      = "{$" name:template_parts "}" {
+          return N('raw_expand_var', { name } )
         }
     
-
-raw_tag 
-  = open:raw_tag_open ___ GT
-    ___
-  	parts:raw_part*
-    ___
-    close:(
-      tag:raw_tag_close {
-      	if(tag == open.tag) return tag;
-        expected('</'+open.tag+'>')
+    raw_expand_nbt
+      = "{" spec:datapath_spec "}" {
+        return N('raw_expand_nbt', { spec } )
       }
-    ) { 
-    	open.parts = parts;
-      return open;
-    }
-  / @raw_tag_open SGT 
-
-raw_tag_open
-  = /*LT attr:(head:raw_attr tail:(___ @raw_attr)* { return [head,...tail] }) &(GT/SGT) {
-  	const tag = N('raw_tag',{props:{}})
-  	tag.attr = attr;
-    return tag;	
-    }
-  / */
-  !LTS LT tag:(WORD)  attr:(___ @raw_attr)* {
-  	return N('raw_tag',{tag,attr});
-	}
-
-  raw_attr = name:ident EQUALS value:value {
-    return {name,value}
-  }
-
-raw_tag_close
-  = LTS @WORD GT
-
-raw_line = parts:(raw_tag/raw_expand/raw_chars)* {
-  return N('raw_line',{parts})
-}
-
-raw_part 
-  = raw_tag 
-  / raw_expand 
-  /  chars:$(EOL) {
-      return N('raw_chars_ws',{chars})
-    }
-  /  raw_chars
-
- raw_chars = chars:$(!(LT) (raw_char))+ {
-    return N('raw_chars',{chars})
-  }
-
-  raw_char 
-    = no_expand_char
-    / &"{" !raw_expand @"{"
 
 
- raw_expand
-  = template_expand_arg
-  / raw_expand_var
-  / raw_expand_score_id
-  / raw_expand_nbt
-  / template_expand_value
-  / template_expand_tag
-  / template_expand_score
-  / template_expand_selector
-  / template_expand_coords
-  
-  raw_expand_var  
-    = "{$" name:template_parts "}" {
-        return N('raw_expand_var', { name } )
-      }
-  
-  raw_expand_nbt
-    = "{" spec:datapath_spec "}" {
-      return N('raw_expand_nbt', { spec } )
-    }
-
-
-  raw_expand_score_id  
-    = "{" holder:score_holder _ "->" _ id:score_objective "}" {
-        return N('raw_expand_score_id', { holder, id } )
-      }
+    raw_expand_score_id  
+      = "{" holder:score_holder _ "->" _ id:score_objective "}" {
+          return N('raw_expand_score_id', { holder, id } )
+        }
 
 
 //\\ TOKENS
+  LT = "<" _
+  LTS = "</" _
+  GT = ___ ">"
+  SGT = ___ "/>"
+  CONCAT = (_ "&" _)?
+
+  
+  OPEN = _ "(" ___
+  CLOSE =  ___ ")"
+  BEGIN = _ "{" ___
+  END =  ___ "}"
+
   COMMA = ___ "," ___
   EQUALS = _ "=" _
 
@@ -1483,73 +1443,73 @@ raw_part
     / EOL_COMMENT
   EOL 'end of line' = __? [\n\r]+ ___ / EOL_COMMENT
 
-EOL_COMMENT 
-  = _ "//" [^\n\r]* [\n\r]+ ___ 
+  EOL_COMMENT 
+    = _ "//" [^\n\r]* [\n\r]+ ___ 
 
-NAME_OR_DIE 
-  = NAME
-  / word:WORD &{ error(word +' is a reserved word')}
+  NAME_OR_DIE 
+    = NAME
+    / word:WORD &{ error(word +' is a reserved word')}
 
-NAME 
-  = !RESERVED @$([a-z_][a-z0-9_]*)
-RESERVED 
-  = ( CONDITION / GAMEMODE / SORT
-    / MOD / ANCHOR / DIRECTION
-    / KEYWORD / DECLARE / PSEUDO / COMMAND
-    / STRINGIFY / BOOLEAN / OTHER
-    ) ![a-z-_]i
+  NAME 
+    = !RESERVED @$([a-z_][a-z0-9_]*)
+  RESERVED 
+    = ( CONDITION / GAMEMODE / SORT
+      / MOD / ANCHOR / DIRECTION
+      / KEYWORD / DECLARE / PSEUDO / COMMAND
+      / STRINGIFY / BOOLEAN / OTHER
+      ) ![a-z-_]i
 
-CONDITION
-  = "advancements" / "distance" / "gamemode" / "level" 
-  / "limit" / "name" / "scores" / "sort" / "type" 
-  / "x_rotation" / "y_rotation" 
+  CONDITION
+    = "advancements" / "distance" / "gamemode" / "level" 
+    / "limit" / "name" / "scores" / "sort" / "type" 
+    / "x_rotation" / "y_rotation" 
 
-GAMEMODE
-  = "adventure" / "creative" / "spectator" / "survival" 
+  GAMEMODE
+    = "adventure" / "creative" / "spectator" / "survival" 
 
-SORT
-  = "furthest" / "farthest" / "arbitrary" / "nearest" 
-  / "oldest" / "random" / "all" / "any" 
+  SORT
+    = "furthest" / "farthest" / "arbitrary" / "nearest" 
+    / "oldest" / "random" / "all" / "any" 
 
-MOD
- = "align" / "anchored" / "as" / "at" / "facing" / "for" 
-  / "in" / "pos" / "positioned" / "predicate" / "rot" / "rotated"
+  MOD
+  = "align" / "anchored" / "as" / "at" / "facing" / "for" 
+    / "in" / "pos" / "positioned" / "predicate" / "rot" / "rotated"
 
-ANCHOR 
-  = "eyes"/"feet"
-
-
-DIRECTION
-  = "back" / "down" / "downward" / "east" / "forward" / "left" 
-  / "north" / "right" / "south" / "up" / "upward" / "west"  
-
-KEYWORD
-  = "after" / "else" / "every" / "and" / "if" / "import" / "repeat" 
-  / "test" / "then" / "until" / "unless" / "on" / "while" / "when" 
-  / "except" / "catch"  
-
-PSEUDO
-  = "resolve" / "reject" / "self" 
-
-DECLARE
-  = "function" / "macro" / "namespace" / "score" / "tag" / "var" 
-
-COMMAND
-  = "append" / "delete" / "merge" / "bossbar" / "clear" / "delete" / "give" / "prepend" / "remove" 
-  / "print" / "say" / "setblock" / "summon" / "tag" / "untag" / "add" / "remove" / "max" / "players" 
-  / "value" / "visible" / "style" / "color"
-
-BOOLEAN
-  = "false" / "true" 
-
-STRINGIFY
-  = "json" / "nbt" / "snbt" 
-
-OTHER  
-  = "deg"
+  ANCHOR 
+    = "eyes"/"feet"
 
 
-// POSITION AND COORDINATES
+  DIRECTION
+    = "back" / "down" / "downward" / "east" / "forward" / "left" 
+    / "north" / "right" / "south" / "up" / "upward" / "west"  
+
+  KEYWORD
+    = "after" / "else" / "every" / "and" / "if" / "import" / "repeat" 
+    / "test" / "then" / "until" / "unless" / "on" / "while" / "when" 
+    / "except" / "catch"  
+
+  PSEUDO
+    = "resolve" / "reject" / "self" 
+
+  DECLARE
+    = "function" / "macro" / "namespace" / "score" / "tag" / "var" 
+
+  COMMAND
+    = "append" / "delete" / "merge" / "bossbar" / "clear" / "delete" / "give" / "prepend" / "remove" 
+    / "print" / "say" / "setblock" / "summon" / "tag" / "untag" / "add" / "remove" / "max" / "players" 
+    / "value" / "visible" / "style" / "color"
+
+  BOOLEAN
+    = "false" / "true" 
+
+  STRINGIFY
+    = "json" / "nbt" / "snbt" 
+
+  OTHER  
+    = "deg"
+
+
+//\\ POSITION AND COORDINATES
 
   Position 
     = OPEN @Coords CLOSE / NativeCoords
@@ -1647,58 +1607,66 @@ OTHER
 
 
 /*---------------------------------------------------------------------*/
-  Statements = head:Statement tail:(EOL @Statement)* {
-  	return [head,...tail]
-  }
-  Declaration = declare 
-  Instruction 
+  Statements 
+    = head:Statement 
+      tail:(EOL @Statement)* {
+        return [head,...tail]
+      }
+  Statement 
+    = statement:(
+      Declaration / Instructable / Execution 
+    ) {
+        statement.text = text();
+        return statement;
+      }
+  Instructable 
     = BlockArg 
-    / Structure
+    / Construct
     / PromiseCall 
-    / assign 
+    / math_scoreboard
+    / Assignment 
     / command 
     / cmd 
-    / builtin 
+     
     / CallSelf 
     / FunctionTagCall
     / MacroCall 
 
-  Executable = last:(CodeBlock / (__ @Instruction)) {
-      return N( 'Executable', { last } )
-  }
-  Execution 
-    = modifiers:Modifiers executable:Executable {
-      return N( 'Execution', { modifiers, executable } )
-  }
-  Modifiers 
-    = head:Modifier tail:(__ @Modifier)* {
-      return [head,...tail]
-    }
-  Statement = statement:(
-    Declaration / Instruction / Execution 
-  ) {
-    statement.text = text();
-    return statement;
-  }
+
+
   CodeBlock = BEGIN statements:Statements END {
       return N( 'CodeBlock', { statements } )
   }
   AnonFunctionResloc = BEGIN statements:Statements END {
       return N( 'AnonFunctionResloc', { statements } )
   }
-  Instructable 
+  Instruction 
     = CodeBlock
     / (__ @Execution)
-    / (__ @Instruction)
+    / (__ @Instructable)
   
   Instructions 
     = Braces
-    / instruction:(__ @Execution / __ @Instruction) {
+    / instruction:(__ @Execution / __ @Instructable) {
       return [instruction]
    }
-
   
   Braces = BEGIN @statements:Statements END 
+
+//\\ execution context modifiers
+
+  Execution 
+    = modifiers:Modifiers executable:Executable {
+      return N( 'Execution', { modifiers, executable } )
+  }
+  Executable = last:(CodeBlock / (__ @Instructable)) {
+      return N( 'Executable', { last } )
+  }
+  Modifiers 
+    = head:Modifier tail:(__ @Modifier)* {
+      return [head,...tail]
+    }
+
   Modifier  
   = MOD:"align" ARG:mod_arg_axes {
       return N( 'ModifierNativeLiteral', { MOD, ARG } )
@@ -1739,31 +1707,32 @@ OTHER
   / arg:LocalCoords {
     return N('ModifierNative', { MOD:'positioned', arg } )
   }
-  
-  Structure 
-    = arg:Conditionals then:Instructable 
-        otherwise:(__ "else" @Instructable)? {
+//\\ construct  
+  Construct 
+    = arg:Conditionals then:Instruction 
+        otherwise:(__ "else" @Instruction)? {
         return N('StructureIfElse', { arg, then, otherwise } )
       }
     / "repeat" mods:(__ @mods:Modifiers)? 
       statements:Braces? 
       __ conds:LoopConditionals 
-      then:(__ "then" @Instructable)? {
+      then:(__ "then" @Instruction)? {
         return N('StructureRepeat',{mods,statements,conds,then})
       }
 
     / "every" __ time:float unit:[tds]? 
       statements:Instructions 
       conds:(__ @LoopConditionals)?
-      then:(__ "then" @Instructable)?{
+      then:(__ "then" @Instruction)?{
       return N('every_until',{statements,conds,time,unit,then})
     }
+
+//\\ conditionals
 
   Conditionals
     = head:Conditional tail:(__ "and" __ @Conditional)* {
         return N('Conditionals',{subs:[head,...tail]})
       } 
-
   TestTrue
     = arg:mod_arg_test {
         return N('ConditionalIf',{arg})
@@ -1794,9 +1763,8 @@ OTHER
     = "while" @TestTrue
     / "until" @TestFalse
 
-  
-  
 
+//\\ block macros
   MacroCallSpec 
     = ns:(@WORD ":")? name:NAME args:(_ OPEN @call_args CLOSE)? {
         return N('MacroCallSpec', {ns, name, args})
@@ -1825,19 +1793,19 @@ OTHER
     return {then,_catch}
   }
 
-  ThenClause = __ "then" __ @Instructable
-  CatchClause = __ "catch" __ @Instructable
+  ThenClause = __ "then" __ @Instruction
+  CatchClause = __ "catch" __ @Instruction
   
 
+  BlockArg
+    = "resolve" _ "(" _ ")" {
+        return N('BlockArgThen')
+      }
+    / "reject" _ "(" _ ")"  {
+        return N('BlockArgElse')
+      }
 
-/*
-   /  "repeat" __ mods:mods? _ statements:Braces conds:(__ @repeat_cond)+ then:(__ "then" @Braces)? {
-     return N('repeat_until',{mods,statements,conds,then})
-   } 
-   
-*/
-
-  
+//\\ function
 
   FunctionCall
     =  resloc:FunctionCallResloc {
@@ -1852,19 +1820,6 @@ OTHER
   FunctionCallResloc = !RESERVED @resloc:resloc_or_tag _ OPEN _ CLOSE 
 
 
-  MacroCall
-    = ns:(@NAME ":")? name:NAME _ OPEN args:call_args? CLOSE {
-        return N('MacroCall', { ns, name, args } )
-      }
-      
-  BlockArg
-    = "resolve" _ "(" _ ")" {
-        return N('BlockArgThen')
-      }
-    / "reject" _ "(" _ ")"  {
-        return N('BlockArgElse')
-      }
-
   CallSelf = "self" _ "(" _ ")" {
     return N('CallSelf', {} )
   }
@@ -1875,9 +1830,6 @@ OTHER
     }
 
   
-  DeclareMacro = "macro" __ name:DeclareName args:macro_args statements:Braces {
-      return N('DeclareMacro', { name,args,statements } )
-  }
-
   DeclareName 
     = NAME_OR_DIE 
+

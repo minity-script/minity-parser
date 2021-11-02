@@ -36,6 +36,12 @@ const transformers = exports.transformers = {
     declareEvent(id, T(trigger), T(conditions), block.resloc);
     return "";
   },
+  DefineJson: ({resloc:{ns,name},value},{T,defineJson,ns:NS}) => {
+    ns=ns ? T(ns) : NS;
+    name=T(name);
+    value=T(value);
+    defineJson(ns,name,value)
+  },
   CallSelf: ({ }, { resloc }) => "function " + resloc,
   string_lit: ({ value }, { Nbt }) => Nbt(String(value)),
   number_lit: ({ value, suffix }, { Nbt }) => {
@@ -237,7 +243,11 @@ const transformers = exports.transformers = {
     return `${type} ${scale}`;
   },
   assignment_bossbar_prop: ({ id,prop }, { T }) => `${T(id)} ${prop}`,
-  assignment_scoreboard: ({type,left,right,scale},{T}) => {
+  AssignmentArg: ({ name, value }, { setArg, Nbt }) => {
+    setArg(name, Nbt(value));
+    return "";
+  },
+  AssignmentScoreboard: ({type,left,right,scale},{T}) => {
     switch (type) {
       case 'value':
         return `scoreboard players set ${T(left)} ${T(right)}`
@@ -253,7 +263,7 @@ const transformers = exports.transformers = {
         return `execute store result score ${T(left)} run data get ${T(right)} ${T(scale)}`
     }
   },
-  assignment_datapath: ({type,left,right,scale},{T,toNbt}) => {
+  AssignmentDatapath: ({type,left,right,scale},{T,toNbt}) => {
     switch (type) {
       case 'datapath':
         return `data modify ${T(left)} set from ${T(right)}`
@@ -269,7 +279,7 @@ const transformers = exports.transformers = {
         return `execute store result ${T(left)} ${T(scale)} run bossbar get ${T(right)}`
     }
   },
-  assignment_bossbar: ({type,left,right,scale},{T,toNbt}) => {
+  AssignmentBossbar: ({type,left,right,scale},{T,toNbt}) => {
     switch (type) {
       case 'datapath':
         return `execute store result bossbar ${T(left)} run data get ${T(right)} ${T(scale)}`
@@ -289,7 +299,7 @@ const transformers = exports.transformers = {
         return `execute store result bossbar ${T(left)} ${T(scale)} run bossbar get ${T(right)}`
     }
   },
-  assignment_success: ({target,type,left,right },{T}) => {
+  AssignmentSuccess: ({target,type,left,right },{T}) => {
     let store, run;
     switch (target) {
       case 'datapath':
@@ -321,11 +331,7 @@ const transformers = exports.transformers = {
   assign_scoreboard_operation({ left, op, right }, { T }) {
     return "scoreboard players operation " + T(left) + " " + op + " " + T(right);
   },
-  assign_run_scoreboard: ({ id }, { T }) => `scoreboard players get ${T(id)}`,
-  assign_run_datapath: ({ path }, { T }) => `data get ${T(path)}`,
-  assign_run_bossbar: ({ id }, { T }) => `bossbar get ${T(id)} ${prop}`,
-  assign_run_statement: ({ statement }, { T }) => `${T(statement)}`,
-  assign_run_conditions: ({ conds }, { T }) => `${T(conds)}`,
+ 
 
   test_entity: ({ selector }, { T }) => `entity ${T(selector)}`,
   test_datapath: ({ path }, { T }) => `data ${T(path)}`,
@@ -462,8 +468,8 @@ const transformers = exports.transformers = {
     const CONDS = T(conds);
     if (!then) {
       const block = addBlock(statements.map(T));
-      block._content.push(`execute ${CONDS}${MODS} run function ${block.resloc}`)
-      return "function " + block.resloc;
+      block._content.push(`execute ${CONDS} ${MODS} run function ${block.resloc}`)
+      return `execute ${MODS} run function ${block.resloc}`;
     } else {
       const block = addBlock([]);
       block._content = [
@@ -503,10 +509,6 @@ const transformers = exports.transformers = {
     return ret;
   },
   BlockArgElse: ({ }, { args }) => args[Symbol.for("BlockArgElse")](),
-  assign_arg: ({ name, value }, { setArg, Nbt }) => {
-    setArg(name, Nbt(value));
-    return "";
-  },
   FunctionTagCall: ({ restag }, { T }) => `function ${T(restag)}`,
   MacroCall: (
     { ns, name, args, then, otherwise },
