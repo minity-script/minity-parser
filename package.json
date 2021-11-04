@@ -1,6 +1,6 @@
 {
   "name": "@minity/parser",
-  "version": "1.0.0-alpha.9",
+  "version": "1.0.0-alpha.10",
   "description": "Parser for minity, a scripting language for Vanilla Minecraft datapacks",
   "main": "src/index.js",
   "scripts": {},
