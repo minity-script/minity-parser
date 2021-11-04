@@ -597,7 +597,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 //\\ if_else
   
   //\\ test
-    test = test_predicate/test_entity/test_datapath/test_scoreboard/test_block
+    test = test_predicate/test_datapath/test_scoreboard/test_entity/test_block
 
     test_inverse = test_scoreboard_inverse
 
@@ -618,7 +618,10 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       / spec:block_spec {
         return N('test_block', { spec } )
       } 
-    
+
+    test_datapath = path:datapath {
+        return N('test_datapath', { path } )
+      }     
 
  
     
@@ -832,10 +835,6 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       = ("delete"/"remove") __ path:datapath {
         return N('delete_datapath', { path } )
       }
-  //\\ test_datapath
-    test_datapath = path:datapath {
-        return N('test_datapath', { path } )
-      } 
 
 //\\ block_spec
   block_spec 'block predicate'

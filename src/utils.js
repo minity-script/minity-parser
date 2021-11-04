@@ -30,7 +30,7 @@ exports.resolveModulePath = (from,to) => {
     path+=".minity"
   } else  {
     const entry = statSync(path,{throwIfNoEntry:false})
-    if (entry.isDirectory()) path=resolve(path,"indix.minity");
+    if (entry.isDirectory()) path=resolve(path,"index.minity");
   }
   //console.log({from,to,path})
   assert(existsSync(path),"module not found: "+path)
