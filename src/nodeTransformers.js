@@ -260,7 +260,7 @@ const transformers = exports.transformers = {
       case 'bossbar':
         return `execute store result score ${T(left)} run bossbar get ${T(right)}`
       case 'datapath':
-        return `execute store result score ${T(left)} run data get ${T(right)} ${T(scale)}`
+        return `execute store result score ${T(left)} run data get ${T(right)} ${scale?T(scale):"1"}`
     }
   },
   AssignmentDatapath: ({type,left,right,scale},{T,toNbt}) => {

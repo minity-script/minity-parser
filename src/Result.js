@@ -5,6 +5,7 @@ const { statSync, mkdirSync, writeFileSync } = require("fs");
 
 const Result = exports.Result = class Result {
   constructor() {
+    this.blockCount = 0;
     this.namespaces = {};
     this.constants = {};
     this.addNamespace("minecraft","Internal");
@@ -101,7 +102,7 @@ class ResultNamespace {
     return this.functions[fn.name] = fn;
   }
   addAnonFunction(self, content,prefix="") {
-    const id = prefix+"_"+Math.random().toString(36).substring(2);
+    const id = prefix+"_"+this.result.blockCount++;
     return this.main.addFunction(self,[this.ns,id],content);
   }
   addJson(name, obj) {

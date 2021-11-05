@@ -145,7 +145,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     rhand_scoreboard 
       = right:lhand_scoreboard { return { type:'scoreboard',right } }
       / right:bossbar_prop_int { return { type:'bossbar',right } }
-      / scale:scale right:datapath { return { type:'datapath',scale,right } }
+      / scale:(@float _ "*" _ )? right:datapath { return { type:'datapath',scale,right } }
       / right:int !(_ "*") { return { type:'value', right } }
       / right:Instructable { return { type:'statement',right } }
       / "test" __ right:Conditionals { return { type:'test',right } }

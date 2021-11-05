@@ -2396,7 +2396,31 @@ function peg$parse(input, options) {
       s0 = s1;
       if (s0 === peg$FAILED) {
         s0 = peg$currPos;
-        s1 = peg$parsescale();
+        s1 = peg$currPos;
+        s2 = peg$parsefloat();
+        if (s2 !== peg$FAILED) {
+          s3 = peg$parse_();
+          if (input.charCodeAt(peg$currPos) === 42) {
+            s4 = peg$c9;
+            peg$currPos++;
+          } else {
+            s4 = peg$FAILED;
+            if (peg$silentFails === 0) { peg$fail(peg$e12); }
+          }
+          if (s4 !== peg$FAILED) {
+            s5 = peg$parse_();
+            s1 = s2;
+          } else {
+            peg$currPos = s1;
+            s1 = peg$FAILED;
+          }
+        } else {
+          peg$currPos = s1;
+          s1 = peg$FAILED;
+        }
+        if (s1 === peg$FAILED) {
+          s1 = null;
+        }
         s2 = peg$parsedatapath();
         if (s2 !== peg$FAILED) {
           peg$savedPos = s0;

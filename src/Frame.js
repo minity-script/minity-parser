@@ -8,8 +8,7 @@ const { randomString, resolveModulePath } = require("./utils.js");
 const { existsSync } = require("fs");
 const { isNbt, toNbt, toSnbt, toJson } = Nbt;
 
-let blockCount = 0
-   
+  
 const Frame = exports.Frame =
   class Frame extends Function {
     constructor() {
@@ -104,7 +103,7 @@ const Frame = exports.Frame =
       })
     }
     addBlock = (lines, ns = this.ns) => {
-      return this.result.addAnonFunction(ns, this.resloc, lines, (++blockCount));
+      return this.result.addAnonFunction(ns, this.resloc, lines, "_b"  );
     }
     
     anonFunction = (lines, ns = this.ns) => {
@@ -270,7 +269,7 @@ Frame.Namespace = class NamespaceFrame extends Frame.Child {
   constructor(parent, {ns, statements}) {
     super(parent, { ns, scope:true });
     const lines = statements.map(this);
-    this.fnName = this.ns+"/load_"+Math.random().toString(36).substr(2)
+    this.fnName = this.ns+"/load_"+this.result.blockCount++
     this.fn = this.result.addFunction("zzz_minity", this.resloc, this.fnName, lines);
   }
   get resloc() {
@@ -284,7 +283,7 @@ Frame.Namespace = class NamespaceFrame extends Frame.Child {
 Frame.Macro = class MacroFrame extends Frame.Child {
   constructor(parent, {name, args}) {
     super(parent, { args, scope:true });
-    this.fnName = this.ns+"/"+name+"_"+Math.random().toString(36).substr(2)
+    this.fnName = this.ns+"/"+name+"_"+this.result.blockCount++
     this.macro = this.macros[name];
     const lines = [];
     for (const s of this.macro.statements) {
