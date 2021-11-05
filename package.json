@@ -3,7 +3,6 @@
   "version": "1.0.0-alpha.13",
   "description": "Parser for minity, a scripting language for Vanilla Minecraft datapacks",
   "main": "src/index.js",
-  "scripts": {},
   "author": "Zoran Obradović",
   "license": "GPL-3.0",
   "keywords": [
@@ -20,5 +19,10 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/minity-script/minity-parser.git"
+  },
+  "scripts": {
+    "next-version": "npm version `node bin/alpha-version.js`",
+    "build": "(cd src; peggy --output minity-parser.js minity.pegjs)",
+    "prepublish": "npm run build; git commit -a -m prepublish; npm run next-version"
   }
 }

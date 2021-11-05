@@ -1716,7 +1716,8 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       statements:Braces? 
       __ conds:LoopConditionals 
       then:(__ "then" @Instruction)? {
-        return N('StructureRepeat',{mods,statements,conds,then})
+        if (mods) return N('StructureRepeatMods',{mods,statements,conds,then})
+        return N('StructureRepeat',{statements,conds,then})
       }
 
     / "every" __ time:float unit:[tds]? 

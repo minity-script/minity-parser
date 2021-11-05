@@ -1242,7 +1242,8 @@ function peg$parse(input, options) {
           return N('StructureIfElse', { arg, then, otherwise } )
         };
   var peg$f245 = function(mods, statements, conds, then) {
-          return N('StructureRepeat',{mods,statements,conds,then})
+          if (mods) return N('StructureRepeatMods',{mods,statements,conds,then})
+          return N('StructureRepeat',{statements,conds,then})
         };
   var peg$f246 = function(time, unit, statements, conds, then) {
         return N('every_until',{statements,conds,time,unit,then})

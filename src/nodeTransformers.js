@@ -463,8 +463,23 @@ const transformers = exports.transformers = {
   NativeCoords: ({ x, y, z }, { T }) => `${T(x)} ${T(y)} ${T(z)}`,
   TildeCoord: ({ arg }, { T }) => arg ? `~${T(arg)}` : '~',
   CaretCoord: ({ arg }, { T }) => arg ? `^${T(arg)}` : '^',
-  StructureRepeat: ({ mods = [], statements = [], conds, then }, { T, ifElse, anonFunction, addBlock, ns }) => {
-    const MODS = (mods || []).map(T).join(" ");
+  StructureRepeat: ({ statements = [], conds, then }, { T, ifElse, anonFunction, addBlock, ns }) => {
+    const CONDS = T(conds);
+    if (!then) {
+      const block = addBlock(statements.map(T));
+      block._content.push(`execute ${CONDS} run function ${block.resloc}`)
+      return `function ${block.resloc}`;
+    } else {
+      const block = addBlock([]);
+      block._content = [
+        ...(statements || []).map(T),
+        ...ifElse(CONDS, `function ${block.resloc}`, T(then))
+      ];
+      return "function " + block.resloc
+    }
+  },
+  StructureRepeatMods: ({ mods = [], statements = [], conds, then }, { T, ifElse, anonFunction, addBlock, ns }) => {
+    const MODS = mods.map(T).join(" ");
     const CONDS = T(conds);
     if (!then) {
       const block = addBlock(statements.map(T));
