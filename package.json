@@ -1,6 +1,6 @@
 {
   "name": "@minity/parser",
-  "version": "1.0.0-alpha.14",
+  "version": "1.0.0-alpha.15",
   "description": "Parser for minity, a scripting language for Vanilla Minecraft datapacks",
   "main": "src/index.js",
   "author": "Zoran Obradović",
