@@ -112,7 +112,7 @@ const transformers = exports.transformers = {
   item_spec: ({ resloc, nbt }, { T, toNbt }) => `${T(resloc)}${nbt ? toNbt(nbt) : ""}`,
   block_state: ({ name, value }, { T }) => T(name) + "=" + T(value),
   block_states: ({ states }, { T }) => "[" + states.map(T).join(",") + "]",
-  block_spec: ({ resloc, states, nbt }, { T, O }) => `${T(resloc)}${O(states)}${O(nbt)}`,
+  block_spec: ({ resloc, states, nbt }, { T,O, toNbt }) => `${T(resloc)}${O(states)}${nbt ? toNbt(nbt) : ""}`,
   test_block: ({ spec }, { T }) => `block ~ ~ ~ ${T(spec)}`,
   test_block_pos: ({ pos, spec }, { T }) => `block ${T(pos)} ${T(spec)}`,
   test_predicate: ({ resloc }, { T }) => `predicate ${T(resloc)}`,
