@@ -143,12 +143,13 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       = var_id / score_id
 
     rhand_scoreboard 
-      = right:lhand_scoreboard { return { type:'scoreboard',right } }
-      / right:bossbar_prop_int { return { type:'bossbar',right } }
+      = right:bossbar_prop_int { return { type:'bossbar',right } }
       / scale:(@float _ "*" _ )? right:datapath { return { type:'datapath',scale,right } }
       / right:int !(_ "*") { return { type:'value', right } }
       / right:Instructable { return { type:'statement',right } }
       / "test" __ right:Conditionals { return { type:'test',right } }
+      / right:lhand_scoreboard { return { type:'scoreboard',right } }
+       
 
   AssignmentDatapath 
     = left:datapath EQUALS rhand:rhand_datapath {
@@ -159,9 +160,9 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       = right:datapath { return { type:'datapath',right } }
       / scale:scale "test" __ right:Conditionals { return { type:'test', scale, right } }
       / right:typed_value !(_ "*") { return { type:'value', right } }
-      / scale:scale right:lhand_scoreboard { return { type:'scoreboard',scale,right } }
-      / scale:scale right:bossbar_prop_int { return { type:'bossbar',scale,right } }
       / scale:scale right:Instructable { return { type:'statement',scale,right } }
+      / scale:scale right:bossbar_prop_int { return { type:'bossbar',scale,right } }
+      / scale:scale right:lhand_scoreboard { return { type:'scoreboard',scale,right } }
     
   AssignmentBossbar 
     = left:bossbar_prop_bool EQUALS right:bool {
@@ -743,7 +744,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
         / datapath_block
 
       datapath_entity 
-        = selector:selector "::" path:nbt_path {
+        = selector:selector_single "::" path:nbt_path {
             return N('datapath_entity', { selector, path } )
           }
 
@@ -898,7 +899,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
   restag_mc
     = restag_full
     / "#" name: resname {
-        return N('resloc_mc', { name } )
+        return N('restag_mc', { name } )
       }
 
   resloc_or_tag_mc
@@ -1613,7 +1614,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       }
   Statement 
     = statement:(
-      Declaration / Instructable / Execution 
+      Instructable / Execution / Declaration
     ) {
         statement.text = text();
         return statement;

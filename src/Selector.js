@@ -71,10 +71,14 @@ exports.Selector = class SelectorSpec {
     const conditions = [];
     const { initial, includes, excludes, scores } = this;
     for (const key in includes) {
-      conditions.push(`${key}=${includes[key]}`)
+      for (const value of includes[key]) {
+        conditions.push(`${key}=${value}`)
+      }
     }
     for (const key in excludes) {
-      conditions.push(`${key}=!${excludes[key]}`)
+      for (const value of excludes[key]) {
+        conditions.push(`${key}=!${value}`)
+      }
     }
     if (Object.keys(scores).length > 0) {
       const parts = [];

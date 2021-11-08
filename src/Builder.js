@@ -28,8 +28,7 @@ exports.Builder = class Builder {
 
 
   input = {
-    json: [],
-    other: []
+    files: [],
   }
 
   output = {
@@ -52,15 +51,19 @@ exports.Builder = class Builder {
 
   scan() {
     for (const path of this.copyDirectories) {
-      const files = walk(path);
+      const files = walk(resolve(path));
       for (const { path, rel, extension } of files) {
+        this.input.files.push({rel,path});
+        /*
         if (extension === '.json') {
           this.input.json.push({ rel, path });
         } else {
           this.input.other.push({ rel, path });
         }
+        */
       }
     }
+    //console.log(this.input.json)
   }
 
   mergeJson(dest, obj) {
@@ -75,14 +78,11 @@ exports.Builder = class Builder {
 
   prepare() {
     const { input, output } = this;
-    for (const { rel, path } of input.other) {
+    for (const { rel, path } of input.files) {
       const dest = resolve(this.buildDirectory, rel);
       output.other[dest] = path;
     }
-    for (const { rel, path } of input.json) {
-      const dest = resolve(this.buildDirectory, "data", rel);
-      output.json[dest] = require(path);
-    }
+    
     minity.compileFile(this.entryPoint, { result: this.result });
     console.log("\n  "+this.entryPoint+" compiled OK.")
   }

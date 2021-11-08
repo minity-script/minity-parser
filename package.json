@@ -24,6 +24,7 @@
     "next-version": "npm version `node bin/alpha-version.js`",
     "build": "(cd src; peggy --output minity-parser.js minity.pegjs)",
     "prepublish": "npm run build; git commit -a -m prepublish; npm run next-version",
-    "publish": "npm publish --access public --tag alpha --tag latest"
-  }
+    "xxx-publish": "npm publish --access public --tag alpha --tag latest"
+  },
+  "private": false
 }
