@@ -1363,19 +1363,29 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
   raw_tag_close
     = LTS @WORD GT
 
-  raw_line = parts:(raw_tag/raw_expand/raw_chars)* {
+  raw_line = parts:raw_line_part* {
     return N('raw_line',{parts})
   }
 
+  raw_line_part 
+    = raw_tag 
+    / raw_expand
+    / chars:__+ {
+      return N('raw_chars_ws',{chars})
+    }
+    /  raw_chars
+
   raw_part 
     = raw_tag 
-    / raw_expand 
-    /  chars:$(EOL) {
+    / raw_expand
+    /  chars:WS+ {
         return N('raw_chars_ws',{chars})
       }
     /  raw_chars
 
-  raw_chars = chars:$(!(LT) (raw_char))+ {
+
+  raw_chars = 
+      chars:$(!LT !WS (raw_char))+ {
       return N('raw_chars',{chars})
     }
 
@@ -1436,11 +1446,14 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 
   _ 'whitespace' = SPACE*
   __ 'whitespace' = SPACE+
-  ___ 'whitespace' = WS*
+  ___ 'whitespace' = WSS*
   SPACE = [ \t]
-  WS  
-    = [ \n\t\r]
+  
+  WS = [ \n\t\r]
+  WSS  
+    = WS
     / EOL_COMMENT
+  
   EOL 'end of line' = __? [\n\r]+ ___ / EOL_COMMENT
 
   EOL_COMMENT 
