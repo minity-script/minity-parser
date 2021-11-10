@@ -1331,9 +1331,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 
   raw_tag 
     = open:raw_tag_open ___ GT
-      ___
       parts:raw_part*
-      ___
       close:(
         tag:raw_tag_close {
           if(tag == open.tag) return tag;
@@ -1370,7 +1368,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
   raw_line_part 
     = raw_tag 
     / raw_expand
-    / chars:__+ {
+    / chars:$(__+) {
       return N('raw_chars_ws',{chars})
     }
     /  raw_chars
@@ -1385,7 +1383,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 
 
   raw_chars = 
-      chars:$(!LT !WS (raw_char))+ {
+      chars:$((!LT !WS raw_char)+) {
       return N('raw_chars',{chars})
     }
 

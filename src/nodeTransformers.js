@@ -378,17 +378,24 @@ const transformers = exports.transformers = {
     ret.text ??= "";
 
     if (parts) {
+      let text = "";
       const myState = Object.assign({}, state)
-      ret.i = state.i||"undef";
       ret.extra = [];
       let first = true;
       for (const i in parts) {
         myState.first = first;
         first = false;
         myState.last = i == parts.length - 1;
-        myState.i = i
-        ret.extra.push(T(parts[i], myState))
+        const res = T(parts[i], myState);
+        if (res instanceof String) {
+          text+=res; 
+        } else {
+          if (text) ret.extra.push(Nbt(text))
+          ret.extra.push(res)
+          text=""
+        }
       }
+      if (text) ret.extra.push(Nbt(text))
     }
     if (paragraph) {
       state.block = true;
@@ -411,13 +418,13 @@ const transformers = exports.transformers = {
     if (state.first) chars = chars.trimStart();
     if (state.last) chars = chars.trimEnd();
     state.block = false;
-    return Nbt("("+state.i+":"+chars+")")
+    return Nbt(chars)
   },
   raw_chars_ws: ({ chars }, { Nbt }, state) => {
-    if (state.last || state.first) {
-      return "("+state.i+")"
+    if (state.block || state.last || state.first) {
+      return Nbt("")
     }
-    return "("+state.i+": )"
+    return Nbt(" ")
     if (!state.block) {
       state.block = true;
       return "\n";
