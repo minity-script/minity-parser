@@ -42,6 +42,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 
   arg_name 'macro argument'
   = "?" @WORD
+
   arg_value = typed_value
 //\\ define macro
 
@@ -236,7 +237,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     
     
   AssignmentArg 
-    = name:arg_name EQUALS value:value {
+    = name:arg_name EQUALS value:arg_value {
       return N('AssignmentArg',{name,value})
     }
 
@@ -848,7 +849,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
           return N('block_states',{states:[head,...tail]})
         }
     block_state 
-      = name:ident EQUALS value:(number/string) {
+      = name:ident EQUALS value:(bool/number/string) {
           return N('block_state',{name,value})
         } 
 

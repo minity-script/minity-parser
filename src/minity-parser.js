@@ -3275,7 +3275,7 @@ function peg$parse(input, options) {
     if (s1 !== peg$FAILED) {
       s2 = peg$parseEQUALS();
       if (s2 !== peg$FAILED) {
-        s3 = peg$parsevalue();
+        s3 = peg$parsetyped_value();
         if (s3 !== peg$FAILED) {
           peg$savedPos = s0;
           s0 = peg$f41(s1, s3);
@@ -7731,9 +7731,12 @@ function peg$parse(input, options) {
     if (s1 !== peg$FAILED) {
       s2 = peg$parseEQUALS();
       if (s2 !== peg$FAILED) {
-        s3 = peg$parsenumber();
+        s3 = peg$parsebool();
         if (s3 === peg$FAILED) {
-          s3 = peg$parsestring();
+          s3 = peg$parsenumber();
+          if (s3 === peg$FAILED) {
+            s3 = peg$parsestring();
+          }
         }
         if (s3 !== peg$FAILED) {
           peg$savedPos = s0;

@@ -171,8 +171,14 @@ const Frame = exports.Frame =
       this.namespace.addObjective(objective, criterion);
     }
     scoreExists = name => !!this.scores[name];
-    scoreObjective = name => this.scores[name].objective;
-    scoreCriterion = name => this.scores[name].criterion;
+    scoreObjective = name => {
+      assert(this.scoreExists(name), "undeclared score " + name)
+      return this.scores[name].objective;
+    }
+    scoreCriterion = name => {
+      assert(this.scoreExists(name), "undeclared score " + name)
+      return this.scores[name].criterion;
+    }
 
     declareTag = (t) => {
       const name = this.scopedName(t);

@@ -101,8 +101,8 @@ const transformers = exports.transformers = {
   cond_brackets_lit: ({ name, op, value }, { T }, { spec }) => {
     spec[op](name, value)
   },
-  cond_brackets_score: ({ name, value }, { T }, { spec }) => {
-    spec.score(T(name), T(value))
+  cond_brackets_score: ({ name, value }, { T, scoreObjective }, { spec }) => {
+    spec.score(scoreObjective(T(name)), T(value))
   },
   cond_brackets_nbt: ({ name, op, value }, { T, toNbt }, { spec }) => {
     spec[op](name, toNbt(value))
