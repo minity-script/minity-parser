@@ -23,8 +23,7 @@
   "scripts": {
     "next-version": "npm version `node bin/alpha-version.js`",
     "build": "(cd src; peggy --output minity-parser.js minity.pegjs)",
-    "prepublish": "npm run build; git commit -a -m prepublish; npm run next-version",
-    "xxx-publish": "npm publish --access public --tag alpha --tag latest"
+    "prepare-publish": "npm run build; git commit -a -m prepublish; npm run next-version"
   },
   "private": false
 }
