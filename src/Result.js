@@ -2,6 +2,7 @@ const { mergeAndConcat:merge } =require('merge-anything');
 const assert = require("assert");
 const { resolve, dirname } = require("path");
 const { statSync, mkdirSync, writeFileSync } = require("fs");
+const {Scope} = require("./Scope")
 
 const Result = exports.Result = class Result {
   constructor() {
@@ -10,6 +11,14 @@ const Result = exports.Result = class Result {
     this.constants = {};
     this.addNamespace("minecraft","Internal");
     this.main = this.addNamespace("zzz_minity","Main");
+    this.imported = {}
+  }
+  importFile = (path) => {
+    if (!this.imported[path]) {
+      let minity = require("./minity.js");
+      minity.compileFile(path, { result: this })
+      this.imported[path] = true
+    }
   }
   addNamespace(ns,kind="Custom") {
     let namespace = this.namespaces[ns];
@@ -38,6 +47,9 @@ const Result = exports.Result = class Result {
   }
   macroExists(ns,...args) {
     return this.namespaces[ns]?.macroExists(...args)
+  }
+  functionExists(ns,...args) {
+    return this.namespaces[ns]?.functionExists(...args)
   }
   getMacro(ns,name) {
     return this.namespaces[ns].macros[name]
@@ -73,6 +85,7 @@ class ResultNamespace {
     //this.addObjective(`--${ns}--vars`, "dummy")
     this.functions = {};
     this.macros = {}
+    this.SCOPE = new Scope(this.result.SCOPE,{namespace:this,prefix:`--${this.ns}-`})
   }
   addObjective(objective, criterion = "dummy") {
     return this.objectives[objective] = {
@@ -90,10 +103,13 @@ class ResultNamespace {
   macroExists = (name) => {
     return(!!this.macros[name])
   }
+  functionExists = (name) => {
+    return(!!this.functions[name])
+  }
   addMacro = (name,props) => {
-    assert(!this.functions[name], "duplicate function " + name)
-    assert(!this.macros[name], "duplicate function " + name)
-    this.macros[name]={ name, ...props };
+    assert(!this.functions[name], "duplicate macro " + name)
+    assert(!this.macros[name], "duplicate macro " + name)
+    this.macros[name]=new ResultMacro(this,{ name, ...props });
   }
   addFunction(self, name, content) {
     const fn = new ResultFunction(this, { self, name, content })
@@ -124,7 +140,8 @@ ResultNamespace.Internal = ResultNamespace
 ResultNamespace.Custom = class ResultNamespaceCustom extends ResultNamespace {
   constructor(result,{...rest}) {
     super(result,rest);
-    this.addObjective(`--${this.ns}--vars`, "dummy");
+    this.varObjective = `--${this.ns}--vars`
+    this.addObjective(this.varObjective, "dummy");
     this.addAnonFunction("",()=>[
       `data modify storage zzz_minity:${this.ns} stack set value []`,
       ... Object.values(this.objectives).map(it=>it.declare)
@@ -230,5 +247,51 @@ class ResultJson extends ResultFile {
   }
   overwrite(path) {
     return JSON.stringify(merge(require(path), this.content),null,2);
+  }
+}
+
+
+class ResultMacro {
+  constructor (namespace,{name,args,statements,parent}) {
+    this.namespace = namespace
+    this.name = name
+    this.args = args
+    this.statements = statements
+    this.parent = parent
+    this.ns = namespace.ns
+  }
+  cache = {}
+  transformArgs({Nbt},args) {
+    const {named={},numbered=[]}=args||{}
+    const new_args = {};
+    for (const i in this.args) {
+      const { name, def } = this.args[i];
+      if (name in named) {
+        new_args[name] = Nbt(named[name])
+      } else if (i in numbered) {
+        new_args[name] = Nbt(numbered[i])
+      } else if (def) {
+        new_args[name] = Nbt(def)
+      } else {
+        throw new Error("arg " + name + " in macro " + macro.name + " is not optional")
+      }
+    }
+    return new_args
+  }
+  expand(args,resolve,reject) {
+    const {name,cache,parent,statements} = this;
+    resolve ??= null
+    reject ??= null
+    const cache_id = JSON.stringify({
+      args,
+      resolve,
+      reject
+    })
+    if (!cache[cache_id]) {
+      const { Frame } = require('./Frame')
+      const C = new Frame.Macro(parent,{name,args,statements,resolve,reject})
+      cache[cache_id] =C.fn
+    }
+    return cache[cache_id]
   }
 }

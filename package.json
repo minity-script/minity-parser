@@ -1,11 +1,12 @@
 {
   "name": "@minity/parser",
-  "version": "1.0.0-alpha.21",
+  "version": "1.0.0-alpha.29",
   "description": "Parser for minity, a scripting language for Vanilla Minecraft datapacks",
   "main": "src/index.js",
   "author": "Zoran Obradović",
   "license": "GPL-3.0",
   "keywords": [
+    "vanilla",
     "minecraft",
     "script",
     "transpiler"

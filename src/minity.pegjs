@@ -663,7 +663,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
   
   
   score_criterion 'criterion'
-    = $([a-z]i [a-z0-9.:_-]i )+
+    = $([a-z]i [a-z0-9.:_-]i+)
   
   //\\ assign_scoreboard
     math_scoreboard
@@ -1015,14 +1015,21 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     array_lit
       = "[" ___
         items:(
-          head:typed_value
-          tail:(COMMA @typed_value )*
+          head:array_item
+          tail:(COMMA @array_item )*
           COMMA?
           { return [head].concat(tail); }
         )?
         ___ "]"
         { return N('array_lit', { type:'array', items: items || [] } ) }
   
+    array_item 
+      = "..." _ array:array {
+          return N('array_spread', { array })
+        } 
+      / value:typed_value {
+        return N('array_value', { value })
+      }
   //\\ number
     typed_number 
       = name:arg_name {	
@@ -1737,8 +1744,14 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       statements:Instructions 
       conds:(__ @LoopConditionals)?
       then:(__ "then" @Instruction)?{
-      return N('every_until',{statements,conds,time,unit,then})
-    }
+        return N('every_until',{statements,conds,time,unit,then})
+      } 
+    / "every" __ time:float unit:[tds]? 
+      conds:(__ @LoopConditionals)
+      then:(__ "then" @Instruction) {
+        return N('every_until',{conds,time,unit,then})
+      }
+
 
 //\\ conditionals
 

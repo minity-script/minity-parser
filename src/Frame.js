@@ -1,6 +1,7 @@
 const assert = require("assert");
 
 const { Result } = require("./Result");
+const { Scope } = require("./Scope");
 const { TreeNode } = require("./TreeNode");
 const { Nbt } = require("./Nbt");
 const { resolve, dirname } = require("path");
@@ -28,8 +29,7 @@ const Frame = exports.Frame =
     }
     importFile = (file) => {
       const path = resolveModulePath(this.root.file,file);
-      let minity = require("./minity.js");
-      minity.compileFile(path, { result: this.result })
+      this.result.importFile(path)
     }
     Nbt = (x,...args) => x instanceof TreeNode ? Nbt(this.T(x),...args) : Nbt(x,...args)
     toNbt = x => x instanceof TreeNode ? toNbt(this.T(x)) : toNbt(x)
@@ -53,9 +53,6 @@ const Frame = exports.Frame =
       }
       return ret;
     }
-    createChild = (...args) => {
-      return new Frame.Child(this, ...args)
-    }
     declareNamespace = (ns, statements) => {
       const C = new Frame.Namespace(this,{ns,statements})
       return C.fn;
@@ -65,29 +62,26 @@ const Frame = exports.Frame =
       const C = new Frame.Function(this,{name,statements})
       return C.fn;
     }
-    declareMacro = (name, props) => {
-      this.namespace.addMacro(name,{...props, parent:this})
+    declareMacro = (name, args, statements) => {
+      this.namespace.addMacro(name,{args, statements, parent:this})
     }
     getMacro = (ns,name) => {
       return this.result.getMacro(ns||this.ns,name);
     }
-    setArg = (name,value)=> {
-      assert (!this.args.hasOwnProperty(name),"Cannot redeclare constant ?"+name);
-      this.args[name]=value;
-    }
-    getArg = (name,type="value")=> {
-      assert (name in this.args,"Undeclared constant ?"+name);
-      return this.args[name];
-    }
+    setArg = (name,value)=> this.SCOPE.setArg(name,value)
+    getArg = (name,type="value")=> this.SCOPE.getArg(name,type)
     macroExists = (ns,name) => {
       return this.result.macroExists(ns||this.ns,name);
     }
-    expandMacro = (ns,name,args) => {
+    functionExists = (ns,name) => {
+      return this.result.functionExists(ns||this.ns,name);
+    }
+    expandMacro = (ns,name,args,resolve,reject) => {
       ns ||= this.ns;
       assert(this.macroExists(ns,name),"no such macro "+ns,name)
       const macro = this.result.getMacro(ns,name);
-      const C = new Frame.Macro(macro.parent,{name,args})
-      return C.fn
+      const new_args = macro.transformArgs(this,args);
+      return macro.expand(new_args,resolve,reject)
     }
     declareEvent = (id, trigger, conditions, then) => {
       this.result.addJson(this.ns, ["advancements",id], {
@@ -148,52 +142,20 @@ const Frame = exports.Frame =
       return constant.id;
     }
 
-    declareVar = (v) => {
-      const name = this.scopedName(v);
-      const objective = `--${this.ns}--vars`;
-      this.vars[v] = { v, name, objective };
-    }
-    getVar(name) {
-      assert(this.vars[name], `Undeclared Variable $${name}`);
-      return this.vars[name];
-    }
-    varExists = name => !!this.vars[name];
-    varName = (name) => this.getVar(name).name;
-    varObjective = (name) => this.getVar(name).objective;
-    varId = (name) => {
-      return this.varName(name) + " " + this.varObjective(name)
-    }
+    declareVar = (name) => this.SCOPE.declareVar(name)
+    varTarget = (name) => this.SCOPE.varTarget(name);
+    varObjective = (name) => this.SCOPE.varObjective(name);
+    varId = (name) => this.SCOPE.varId(name)
 
-    declareScore = (s, criterion) => {
-      criterion ||= "dummy"
-      const objective = this.scopedName(s);
-      this.scores[s] = { objective, criterion, ns: this.ns };
-      this.namespace.addObjective(objective, criterion);
-    }
-    scoreExists = name => !!this.scores[name];
-    scoreObjective = name => {
-      assert(this.scoreExists(name), "undeclared score " + name)
-      return this.scores[name].objective;
-    }
-    scoreCriterion = name => {
-      assert(this.scoreExists(name), "undeclared score " + name)
-      return this.scores[name].criterion;
-    }
+    declareScore = (name, criterion) => this.SCOPE.declareScore(name,criterion)
+    scoreObjective = name => this.SCOPE.scoreObjective(name)
+    scoreCriterion = name => this.SCOPE.scoreCriterion(name)
+    declareTag = name => this.SCOPE.declareTag(name)
+    tagId = name => this.SCOPE.tagId(name)
 
-    declareTag = (t) => {
-      const name = this.scopedName(t);
-      this.tags[t] = { name, ns: this.ns };
+    get frame() {
+      return this
     }
-    tagExists = name => !!this.tags[name];
-    tagId = t => {
-      assert(this.tagExists(t), "undeclared tag " + t)
-      return this.tags[t].name;
-    }
-
-    scopedName(name) {
-      return this.prefix + name;
-    }
-
     get namespace() {
       return this.result.getNamespace(this.ns)
     }
@@ -205,12 +167,12 @@ Frame.Root = class FrameRoot extends Frame {
     this.file = file;
     this.ns = ns;
     this.args = args
-    this.scopes = [];
     this.root = this;
     this.result = result ?? new Result();
     this.checkErrors = checkErrors;
+    //this.SCOPE = new Scope(null,{args})
   }
-
+  
   macros = {};
   constants = {};
   scores = {};
@@ -219,24 +181,12 @@ Frame.Root = class FrameRoot extends Frame {
 }
 
 Frame.Child = class FrameChild extends Frame {
-  constructor(parent, { args = {}, ns = parent.ns, scope = null }) {
+  constructor(parent, { args = {}, ns = parent.ns }) {
     super(parent)
     this.parent = parent;
     this.root = parent.root;
     this.ns = ns;
-    if (scope) {
-      this.vars = Object.assign({}, parent.vars)
-      this.scores = Object.assign({}, parent.scores)
-      this.tags = Object.assign({}, parent.tags)
-      this.args = Object.assign(Object.create(parent.args),args)
-      this.scope = this;
-    } else {
-      this.args = parent.args;
-      this.vars = parent.vars;
-      this.scores = parent.scores;
-      this.tags = parent.tags;
-      this.scope = parent.scope;
-    }
+    this.args = args;
   }
 
   get macros() {
@@ -250,60 +200,54 @@ Frame.Child = class FrameChild extends Frame {
   }
 }
 
-Frame.Function = class FunctionFrame extends Frame.Child {
-  constructor(parent, {name,statements}) {
-    super(parent, { scope:true });
-    this.fnName = name
-    const lines = [];
-    for (const s of statements) {
-      lines.push(
-        //"# "+s.text.split(/[\r\n]+/).join("\n# "),
-        this.transform(s) )
-    }
-    //const lines = statements.map(this);
-    this.fn = this.result.addFunction(this.ns, this.resloc, this.fnName, lines);
-  }
-  get resloc() {
-    return this.ns + ":" + this.fnName
-  }
-  get prefix() {
-    return "--" + this.ns + "-" + this.fnName + "-"
+Frame.Generic = class GenericFrame extends Frame.Child {
+  constructor(parent, { ...rest }) {
+    super(parent, { ...rest, scope:true });
+    Object.assign(this, this.extra(rest))
+    this.resloc = this.fnNamespace+":"+this.fnName;
+    const lines = this.statements.map(this.transform);
+    this.fn = this.result.addFunction(this.fnNamespace, this.resloc, this.fnName, lines);
   }
 }
 
-Frame.Namespace = class NamespaceFrame extends Frame.Child {
-  constructor(parent, {ns, statements}) {
-    super(parent, { ns, scope:true });
-    const lines = statements.map(this);
-    this.fnName = this.ns+"/load_"+this.result.blockCount++
-    this.fn = this.result.addFunction("zzz_minity", this.resloc, this.fnName, lines);
-  }
-  get resloc() {
-    return "zzz_minity:" + this.fnName
-  }
-  get prefix() {
-    return "--" + this.ns + "-"
+Frame.Namespace = class NamespaceFrame extends Frame.Generic {
+  extra ({statements}) {
+    return {
+      SCOPE: this.namespace.SCOPE,
+      fnNamespace: "zzz_minity",
+      fnName: this.ns+"/load_"+this.result.blockCount++,
+      prefix: "--" + this.ns + "-",
+      statements 
+    }
   }
 }
 
-Frame.Macro = class MacroFrame extends Frame.Child {
-  constructor(parent, {name, args}) {
-    super(parent, { args, scope:true });
-    this.fnName = this.ns+"/"+name+"_"+this.result.blockCount++
-    this.macro = this.macros[name];
-    const lines = [];
-    for (const s of this.macro.statements) {
-      lines.push(
-        //"# "+s.text.split(/[\r\n]+/).join("\n# "),
-        this.transform(s) 
-      )
+Frame.Function = class FunctionFrame extends Frame.Generic {
+  extra ({name,statements}) {
+    const prefix = "--" + this.ns + "-" + name + "-"
+    const {namespace} = this
+    return {
+      SCOPE: new Scope(this.parent.SCOPE,{prefix,namespace}),
+      fnNamespace: this.ns,
+      fnName: name,
+      prefix,
+      statements 
     }
-    this.fn = this.result.addFunction("zzz_minity", this.resloc, this.fnName, lines);
   }
-  get resloc() {
-    return "zzz_minity:" + this.fnName
-  }
-  get prefix() {
-    return "--" + this.ns + "-" + this.macro.name + "-"
+}
+
+Frame.Macro = class MacroFrame extends Frame.Generic {
+  extra ({name,statements,args,reject,resolve}) {
+    const prefix = "--" + this.ns + "-" + name + "-"
+    const {namespace} = this
+    return {
+      SCOPE: new Scope(this.parent.SCOPE,{prefix,namespace,args}),
+      fnNamespace: "zzz_minity",
+      fnName: this.ns+"/"+name+"_"+this.result.blockCount++,
+      reject,
+      resolve,
+      prefix,
+      statements: statements
+    }
   }
 }

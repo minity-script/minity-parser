@@ -22,8 +22,8 @@ const transformers = exports.transformers = {
     }
     return "# function " + fn.resloc;
   },
-  DeclareMacro: ({ name, ...props }, { declareMacro }) => {
-    declareMacro(name, props);
+  DeclareMacro: ({ name, args, statements }, { declareMacro }) => {
+    declareMacro(name, args, statements);
     return "";
   },
   DeclareEvent({ trigger, conditions, then }, { T, ns, declareEvent, addBlock }) {
@@ -64,7 +64,12 @@ const transformers = exports.transformers = {
   string_snbt: ({ value }, { Nbt, toNbt }) => {
     return Nbt(toNbt(value), true);
   },
-  array_lit: ({ items }, { T, Nbt }) => Nbt(items.map(T)),
+  array_value: ({value},{T}) => [T(value)],
+  array_spread: ({array},{T}) => T(array),
+  array_lit: ({ items }, { T, Nbt }) => {
+    let values = items.map(T).flat()
+    return Nbt(values)
+  },
   template_lit: ({ parts }, { T, Nbt }) => Nbt(parts.map(Nbt).join("")),
 
   declare_var: ({ name, value }, { T, toNbt, declareVar, varId }) => {
@@ -213,11 +218,12 @@ const transformers = exports.transformers = {
   },
   template_expand_score_id: ({ id }, { T }) => (T(id)),
   template_expand_selector: ({ selector }, { T }) => T(selector),
+  template_expand_coords: ({ coords }, { T }) => T(coords),
 
-  raw_expand_var: ({ name }, { T, Nbt, varObjective, varName }) => Nbt({
+  raw_expand_var: ({ name }, { T, Nbt, varObjective, varTarget }) => Nbt({
     score: {
       objective: varObjective(T(name)),
-      name: varName(T(name)),
+      name: varTarget(T(name)),
     }
   }),
   raw_expand_score_id: ({ holder, id }, { T, Nbt, scoreObjective }) => Nbt({
@@ -516,7 +522,7 @@ const transformers = exports.transformers = {
       return "function " + block.resloc;
     }
     if (!then) {
-      const lines = statements.map(T);
+      const lines = (statements || []).map(T);
       const block = addBlock(lines);
       block._content.push(`execute ${T(conds)} run schedule function ${block.resloc} ${Nbt(time)}${unit}`)
       return "function " + block.resloc;
@@ -531,86 +537,43 @@ const transformers = exports.transformers = {
       return "function " + block.resloc
     }
   },
-  BlockArgThen: ({ }, { args }) => {
-    const ret = args[Symbol.for("BlockArgThen")]()
-    return ret;
-  },
-  BlockArgElse: ({ }, { args }) => args[Symbol.for("BlockArgElse")](),
+  BlockArgThen: ({ }, { O, resolve }) => resolve,
+  BlockArgElse: ({ }, { O, reject }) => reject,
   FunctionTagCall: ({ restag }, { T }) => `function ${T(restag)}`,
   MacroCall: (
     { ns, name, args, then, otherwise },
-    { T, Nbt, macroExists, expandMacro, getMacro, ns: NS }
+    { macroExists, functionExists, expandMacro, ns: NS }
   ) => {
+    ns ||= NS
     if (macroExists(ns, name)) {
-
-      // this is a macro?
-
-      const macro = getMacro(ns, name);
-      const new_args = {};
-
-      const named = args?.named || {};
-      const numbered = args?.numbered || [];
-
-      for (const i in macro.args) {
-        const { name, def } = macro.args[i];
-        if (name in named) {
-          new_args[name] = Nbt(named[name])
-        } else if (i in numbered) {
-          new_args[name] = Nbt(numbered[i])
-        } else if (def) {
-          new_args[name] = Nbt(def)
-        } else {
-          throw new Error("arg " + name + " in macro " + macro.name + " is not optional")
-        }
-      }
-      const thenCode = new_args[Symbol.for("BlockArgThen")] = () => then ? T(then) : ""
-      const elseCode = new_args[Symbol.for("BlockArgElse")] = () => otherwise ? T(otherwise) : ""
-      return "function " + expandMacro(ns, name, new_args).resloc
+      return "function " + expandMacro(ns, name, args).resloc
     }
     // not a macro, so maybe an ordinary function call, with no arguments?
     if (!args && !then && !otherwise) {
-      return `function ${ns || NS}:${name}`;
+      if (!functionExists(ns,name)) console.log('Warning: Calling undeclared (external?) function '+ns+":"+name);
+      return `function ${ns}:${name}`;
     }
     // neither, so it's an error
     assert(false, `no such macro ${ns || NS}:${name}`)
   },
   arg: ({ name }, { getArg }) => getArg(name),
   MacroCallSpec: (
-    { ns, name, args, then, otherwise },
-    { T, Nbt, macroExists, expandMacro, getMacro, ns: NS }
+    { ns, name, args },
+    { macroExists, ns: NS }
   ) => {
+    ns ||=NS
     assert(macroExists(ns, name), `no such macro ${ns || NS}:${name}`)
-    const macro = getMacro(ns, name);
-    const new_args = {};
-    const named = args?.named || {};
-    const numbered = args?.numbered || [];
-    for (const i in macro.args) {
-      const { name, def } = macro.args[i];
-      if (name in named) {
-        new_args[name] = Nbt(named[name])
-      } else if (i in numbered) {
-        new_args[name] = Nbt(numbered[i])
-      } else if (def) {
-        new_args[name] = Nbt(def)
-      } else {
-        throw new Error("arg " + name + " in macro " + macro.name + " is not optional")
-      }
-    }
-    return { ns, name, args: new_args };
+    return { ns, name, args };
   },
   PromiseTrue: ({ spec }, { expandMacro, T }, { thenCode, catchCode }) => {
     const { ns, name, args } = T(spec);
-    args[Symbol.for("BlockArgThen")] = () => thenCode;
-    args[Symbol.for("BlockArgElse")] = () => catchCode;
-    return "function " + expandMacro(ns, name, args).resloc
+    return "function " + expandMacro(ns, name, args, thenCode, catchCode).resloc
   },
   PromiseFalse: ({ spec }, { expandMacro, T }, { thenCode, catchCode }) => {
     const { ns, name, args } = T(spec);
-    args[Symbol.for("BlockArgThen")] = () => catchCode;
-    args[Symbol.for("BlockArgElse")] = () => thenCode;
-    return "function " + expandMacro(ns, name, args).resloc
+    return "function " + expandMacro(ns, name, args, thenCode, catchCode).resloc
   },
-  PromiseCall: ({ promises, then, _catch }, { anonFunction, T, O }) => {
+  PromiseCall: ({ promises, then, _catch }, { T, O }) => {
     let thenCode = T(then);
     const catchCode = O(_catch);
     for (const promise of promises.concat().reverse()) {
