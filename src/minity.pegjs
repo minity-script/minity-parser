@@ -41,9 +41,10 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 //\\ compile-time constant
 
   arg_name 'macro argument'
-  = "?" @WORD
+    = "?" @WORD
 
-  arg_value = typed_value
+  arg_value 
+    = typed_value
 //\\ define macro
 
   DeclareMacro = "macro" __ name:DeclareName args:macro_args statements:Braces {

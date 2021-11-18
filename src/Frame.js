@@ -153,6 +153,19 @@ const Frame = exports.Frame =
     declareTag = name => this.SCOPE.declareTag(name)
     tagId = name => this.SCOPE.tagId(name)
 
+    makeResloc = (ns,name,def=this.ns) => {
+      if (ns) {
+        assert(name.match(/^[_a-z10-9./]+$/),`bad resource location ${ns}:${name}`)
+      } else {
+        assert(name.match(/^([_a-z10-9./]+:)?[_a-z10-9./]+$/),`bad resource location ${ns}:${name}`)
+        if (name.match(/:/)) {
+          ([ns,name] = name.split(/:/))
+        }
+      }
+      ns||=def
+      return `${ns}:${name}`
+    }
+
     get frame() {
       return this
     }

@@ -273,7 +273,7 @@ class ResultMacro {
       } else if (def) {
         new_args[name] = Nbt(def)
       } else {
-        throw new Error("arg " + name + " in macro " + macro.name + " is not optional")
+        throw new Error("arg " + name + " in macro " + this.name + " is not optional")
       }
     }
     return new_args
