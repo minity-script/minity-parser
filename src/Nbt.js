@@ -2,7 +2,7 @@ const IS_NBT = Symbol()
 const TO_NBT = Symbol()
 const TO_JSON = Symbol()
 const IS_JSON = Symbol()
-
+const print = console['log']
 const Nbt = exports.Nbt = function Nbt(value,...args) {
   if (Nbt.isNbt(value)) return value;
   if (typeof value === 'boolean') {
@@ -20,12 +20,10 @@ const Nbt = exports.Nbt = function Nbt(value,...args) {
   if (typeof value === 'object') {
     return new NbtCompound(value,...args);
   }
-  console.log("bad value", value,...args)
-  debugger;
+  print("bad value", value,...args)
   throw new Error("bad nbt value")
 }
 Nbt.isNbt = value => {
-  //console.log("is", value)
 	return (value ?? false) && !!value[IS_NBT];
 }
 
@@ -56,7 +54,7 @@ class NbtNumber extends Number {
   } 
 	constructor(value,suffix) {
   	super(value);
-    this.suffix = suffix
+    this.suffix = (suffix||"").toLowerCase()
   }
 }
 
@@ -90,7 +88,6 @@ class NbtCompound{
   	let ret =[];
     for (let id in this) {
     	let key = (!id.match(/^[a-z_]\w*$/i)) ? JSON.stringify(id) : id;
-      //if (typeof this[id] === "undefined") console.log("UNDEFINED",id,JSON.stringify(this))
     	ret.push(key +":"+ Nbt.toNbt(this[id]))
     }
     return "{"+ret.join(',')+"}";

@@ -12,13 +12,12 @@ const parser = (()=>{
 })()
 
 
-const { TreeNode } = require("./TreeNode");
+const { GenericNode,ValueNode,InstructionNode } = require("./TreeNode");
 const { Result } = require("./Result");
 const { Frame } = require("./Frame");
 
 const minity = {
   Result,
-  TreeNode,
   parse(text,options={}) {
     const ret =  parser.parse(text,options);
     return ret;
@@ -40,7 +39,15 @@ const minity = {
     const tree = minity.parse(text,{
       ...rest,
       N: (...args) => {
-        const node = new TreeNode(...args);
+        const node = new GenericNode(...args);
+        return node;
+      },
+      V: (...args) => {
+        const node = new ValueNode(...args);
+        return node;
+      },
+      I: (...args) => {
+        const node = new InstructionNode(...args);
         return node;
       }
     })

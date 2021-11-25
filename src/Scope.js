@@ -1,73 +1,113 @@
 const assert = require("assert");
+const {Compiler} = require("./compiler");
 
-const Scope = module.exports.Scope = class Scope {
-  constructor (parent,{args={},prefix="--minity--global-",namespace}={}) {
-    this.parent = parent
-    this.args = args||{}
-    this.tags = {}
-    this.vars = {}
-    this.scores = {};
-    this.prefix = prefix
-
+exports.Scope = class Scope {
+  constructor(parent, { args = {}, prefix = "--minity--global-", namespace } = {}) {
     this.namespace = namespace;
+    this.parent = parent
+    this.prefix = prefix
+    const { varObjective } = namespace;
+    this.tags = new ScopeItems(parent?.tags, Tag, { prefix })
+    this.vars = new ScopeItems(parent?.vars, Variable, { prefix, objective: varObjective })
+    this.scores = new ScopeItems(parent?.scores, Score, { prefix }, ({ objective, criterion }) => this.namespace.addObjective(objective, criterion));
+    this.constants = new ScopeItems(parent?.constants, Constant, { prefix })
+    for (const name in args) {
+      this.setArg(name, args[name])
+    }
   }
 
-  scopedId(name) {
-    return this.prefix+name
-  }
-  get(what,name,error) {
-    if (name in this[what]) return this[what][name]
-    assert(this.parent, (error||"undefined "+what+" ")+name);
-    return this.parent.get(what,name,error)
-  }
-  getArg(name) {
-    return this.get('args',name, "Undeclared constant ?" );
-  }
-  setArg(name,value) {
-    assert (!this.args.hasOwnProperty(name),"Cannot redeclare constant ?"+name);
-    this.args[name]=value;
-  }
-  getTag(name) {
-    return this.get('tags',name,"Undeclared tag .");
-  }
-  declareTag = (name) => {
-    const id = this.scopedId(name);
-    this.tags[name] = { id, ns: this.ns };
-  }
-  tagId = (name) => {
-    return this.getTag(name).id
-  }
+  getArg = name => this.constants.get(name).value
+  setArg = (name, value) => this.constants.declare(name, { value })
+}
 
-  getVar(name) {
-    return this.get('vars',name,'Undeclared variable $')
+class ScopeItems {
+  items = {}
+  constructor(parent, ItemClass, itemArgs = {}, cb) {
+    this.parent = parent
+    this.itemArgs = itemArgs
+    this.ItemClass = ItemClass
+    this.cb = cb
   }
-  declareVar = (name) => {
-    const target = this.scopedId(name);
-    const objective = this.namespace.varObjective;
-    this.vars[name] = { name, target, objective };
+  get(name) {
+    console.log('get',this.itemArgs.prefix, this.ItemClass.describe(name), this.items[name])
+    if (name in this.items) return this.items[name];
+    assert(this.parent, "Undeclared " + this.ItemClass.describe(name));
+    return this.parent.get(name)
   }
-  
-  varTarget = (name) => this.getVar(name).target;
-  varObjective = (name) => this.getVar(name).objective;
-  varId = (name) => {
-    return this.varTarget(name) + " " + this.varObjective(name)
+  declare(name, args) {
+    const declareArgs = { name, ...this.itemArgs, ...args }
+    //console.log('declare',this.itemArgs.prefix, this.ItemClass.describe(name) , declareArgs)
+    const item = new this.ItemClass(declareArgs)
+    this.items[name] = item;
+    this.cb && this.cb(item)
+    return item
   }
+  create(name,...args) {
+    return this.get(name).create(...args)
+  }
+}
 
-  getScore(name) {
-    return this.get('scores',name,'Undeclared score ->')
+class ScopedItem {
+  constructor({ ns, prefix, name }) {
+    this.ns = ns
+    this.prefix = prefix
+    this.name = name
+    this.id = this.prefix + this.name
   }
+  static describe = name => name
 
-  declareScore (name, criterion) {
-    criterion ||= "dummy"
-    const objective = this.scopedId(name);
-    this.scores[name] = { name, objective, criterion, ns: this.ns };
-    this.namespace.addObjective(objective, criterion);
-  }
+}
 
-  scoreObjective = name => {
-    return this.getScore(name).objective
+class ScoreBoard extends ScopedItem {
+  constructor({ criterion, ...rest }) {
+    super(rest);
+    this.criterion = criterion || "dummy";
   }
-  scoreCriterion = name => {
-    return this.getScore(name).criterion
+}
+
+class Score extends ScoreBoard {
+  constructor(args) {
+    super(args);
+    this.objective = this.id
   }
+  static describe = name => "score ->" + name
+  code = target => target + " " + this.objective
+  create = ({target}) => {
+    const {objective} = this;
+    if (typeof target!=='string') {
+      assert(false,"not a string")
+    }
+    return Compiler.ScoreboardEntry.create({objective,target})
+  }
+}
+
+class Variable extends ScoreBoard {
+  constructor({ objective, ...args }) {
+    super(args)
+    this.objective = objective
+    this.target = this.id
+  }
+  static describe = name => "variable $" + name
+  code = () => this.target + " " + this.objective
+  create = () => {
+    const {objective,target} = this;
+    return Compiler.ScoreboardEntry.create({objective,target})
+  }
+}
+
+class Constant extends ScopedItem {
+  constructor(args) {
+    super(args)
+    this.value = args.value
+  }
+  static describe = name => "constant ?" + name
+  create = () => {
+    const {value} = this;
+    return Compiler.Literal.create({value})
+  }
+}
+
+class Tag extends ScopedItem {
+  static describe = name => "tag ." + name
+  code = () => this.id
 }

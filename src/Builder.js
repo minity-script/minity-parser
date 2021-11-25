@@ -4,7 +4,7 @@ const { mergeAndConcat:merge } =require('merge-anything');
 const minity = require("./minity");
 const { Result } = require("./Result");
 const { walk } = require("./utils");
-
+const print = console['log']
 exports.Builder = class Builder {
 
   static scan(options) {
@@ -54,16 +54,8 @@ exports.Builder = class Builder {
       const files = walk(resolve(path));
       for (const { path, rel, extension } of files) {
         this.input.files.push({rel,path});
-        /*
-        if (extension === '.json') {
-          this.input.json.push({ rel, path });
-        } else {
-          this.input.other.push({ rel, path });
-        }
-        */
       }
     }
-    //console.log(this.input.json)
   }
 
   mergeJson(dest, obj) {
@@ -84,7 +76,7 @@ exports.Builder = class Builder {
     }
     
     minity.compileFile(this.entryPoint, { result: this.result });
-    console.log("\n  "+this.entryPoint+" compiled OK.")
+    print("\n  "+this.entryPoint+" compiled OK.")
   }
 
   build() {
@@ -121,7 +113,7 @@ exports.Builder = class Builder {
           "description": this.description
       }
     },null,2),{encoding:"utf-8",recursive:true})
-    console.error(`  Copied ${copied} files, wrote ${wrote} files.`)
+    print(`  Copied ${copied} files, wrote ${wrote} files.`)
   }
 
   checkTo() {

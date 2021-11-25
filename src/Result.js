@@ -85,7 +85,6 @@ class ResultNamespace {
     //this.addObjective(`--${ns}--vars`, "dummy")
     this.functions = {};
     this.macros = {}
-    this.SCOPE = new Scope(this.result.SCOPE,{namespace:this,prefix:`--${this.ns}-`})
   }
   addObjective(objective, criterion = "dummy") {
     return this.objectives[objective] = {
@@ -146,6 +145,7 @@ ResultNamespace.Custom = class ResultNamespaceCustom extends ResultNamespace {
       `data modify storage zzz_minity:${this.ns} stack set value []`,
       ... Object.values(this.objectives).map(it=>it.declare)
     ],"objectives").addTag("minecraft","load");
+    this.scope = new Scope(this.result.scope,{namespace:this,prefix:`--${this.ns}-`})
   }
 }
 

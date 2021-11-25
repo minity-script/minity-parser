@@ -1,11 +1,20 @@
 {
-  const _N = options.N || (($,props,location) => ({$,...props}));
-  const N = ($,props) => { 
-    const loc = location();
-    const node = _N($,props,loc)
-    if(!loc) debugger;
-    return node;
+
+  const FN = fn => {
+    fn||=($,location,...args)=>{
+      const ret = {$}
+      for (const arg of args) Object.assign(ret,arg);
+      return ret;
+    }
+    return ($,...args) => {
+      const loc = location();
+      const node = fn($,loc,...args)
+      return node;  
+    }
   }
+  const N = FN(options.N);
+  const V = FN(options.V);
+  const I = FN(options.I);
 }
 
 
@@ -26,7 +35,9 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
   global 
     = DeclareFunction
     / DeclareMacro
-    / DeclareEvent
+    / command: DeclareEvent {
+        return I('NativeCommand',{command})  
+      }
     / Directive
     / Statement
 
@@ -47,8 +58,9 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     = typed_value
 //\\ define macro
 
-  DeclareMacro = "macro" __ name:DeclareName args:macro_args statements:Braces {
-      return N('DeclareMacro', { name,args,statements } )
+DeclareMacro 
+  = "macro" __ name:IDENT args:macro_args statements:Braces {
+      return I('DeclareMacro', {},{ name, args,statements  } )
     }
 
   //\\ macro_args
@@ -64,12 +76,9 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     }
 
 
-  
-
-
 //\\ macro call
 
-  MacroCall
+MacroCall
   = ns:(@NAME ":")? name:NAME _ OPEN args:call_args? CLOSE {
       return N('MacroCall', { ns, name, args } )
     }
@@ -100,120 +109,179 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     }
 
 //\\ declare
-  Declaration 'declaration'
-  = declare_var
-  / declare_score
-  / declare_tag
+Declaration 'declaration'
+  = DeclareVar
+  / DeclareScore
+  / DeclareTag
 
-    declare_tag 
-      = "tag" __ name:ident_lit {
-        return N('declare_tag',{name})
+    DeclareTag 
+      = "tag" __ name:ident_lit &EOL {
+        return I('DeclareTag',{name})
       }
   
-    declare_var 
-      = "var" __ name:var_name value:(EQUALS @int)? {
-          return N('declare_var',{name,value})
+    DeclareVar 
+      = "var" __ "$" name:IDENT value:(EQUALS @int)? {
+          return I('DeclareVar',{value},{name})
         }
   
-    declare_score 
+    DeclareScore 
       = "score" __ name:IDENT criterion:(__ @score_criterion)? {
-        return N('declare_score',{name,criterion})
+        return I('DeclareScore',{},{name,criterion})
       }
-//\\ assignment
-  Assignment 'assignment'
-  = AssignmentArg
+
+Mod 
+  = mod:ModName __ arg:ValueNode 
+
+ModName 
+  = "as" { return "ModAs" }
+  / "at" { return "ModAt" }
+  / "in" { return "ModIn" }
+  / "for" { return "ModFor" }
+  / "align" { return "ModAlign" }
+  / "anchored" { return "ModAnchored" }
+  / "facing" { return "ModFacing" }
+  / "rot""ated"? __ "as" { return "ModRotatedAs" }
+  / "pos""itioned"? __ "as" { return "ModPositionedAs" }
+  / "rot""ated"? { return "ModRotated" }
+  / "pos""itioned"? { return "ModPositioned" }
+
+ValueNode 
+  = ValueConstant
+  / ValueVariable
+  / ValueBossBarProp
+  / ValueScore
+  / ValueDataPath
+  / ValueSelector
+  // ValueResLoc
+  / ValueLiteral
+  
+
+  LValue
+    = ValueConstant
+    / ValueVariable
+    / ValueBossBarProp
+    / ValueScore
+    / ValueDataPath
+
+  RValue
+    = ValueNode
+    / ValueNativeCommand
+
+  ValueDataPath
+    = ValueDataPathStorage
+    / ValueDataPathVar
+    / ValueDataPathEntity
+    / ValueDataPathBlock
+        
+    ValueDataPathEntity
+      = selector:selector_single "::" path:nbt_path {
+          return V('DataPathEntity', { selector, path } )
+        }
+
+    ValueDataPathStorage
+      = "@@" name:resloc "::" path:nbt_path {
+          return V('DataPathStorage', { name, path } )
+        }
+
+    ValueDataPathBlock
+      = position:Position "::" path:nbt_path {
+          return V('DataPathBlock', { position,path } )
+        }
+
+    ValueDataPathVar
+      = "@@" path:nbt_path { return N('ValueDataPathVar', { path } ) }
+
+  ValueVariable 
+    = "$" name:IDENT {
+      return V('Variable',{},{name})
+    }
+
+  ValueConstant
+    = "?" name:IDENT {
+      return V('Constant',{},{name})
+    }
+
+  ValueScore 
+    = target:selector _ "->" _ name:string {
+      return V( 'Score', { target,name } )
+    } 
+
+  ValueSelector 
+    = spec:selector_spec {
+      return V( 'Selector', { spec } )
+    } 
+
+  ValueBossBarProp 
+    = "bossbar" __ resloc:resloc __ prop:IDENT {
+      return V( 'BossBarProp', { resloc},{ prop } )
+    } 
+
+  ValueLiteral
+    = value:typed_value {
+      return V('Literal',{value})
+    }
+ 
+  ValueNativeCommand
+    = "/" command:command_parts {
+      return V('NativeCommand', { command  } )
+    } 
+
+  
+Assign 
+  = AssignScaled 
+  / AssignUnary 
+  / AssignBinary
+
+  AssignScaled
+    = left:ValueNode EQUALS scale:AssignmentScale right:RValue {
+        return I('AssignScaled',{left,right,scale})  
+      } 
+  AssignBinary
+    = left:ValueNode _ op:AssignOp _ right:RValue {
+        return I(op ,{left,right})  
+      } 
+
+  AssignUnary
+    = left:ValueNode _ op:AssignOpUnary {
+        return I(op ,{left})  
+      } 
+
+  AssignmentScale 
+    = scale:(@typed_number _ "*" _) {
+      return N('AssignmentScale',{scale})
+    }
+
+  AssignOp 
+    = "<=>" { return 'AssignSwap' }
+    / "+=" { return 'AssignAdd' }
+    / "-=" { return 'AssignSub' }
+    / "*=" { return 'AssignMul' }
+    / "/=" { return 'AssignDiv' }
+    / "%=" { return 'AssignMod' }
+    / ">=" { return 'AssignGT' }
+    / "<=" { return 'AssignLT' }
+    // "?=" { return 'AssignSuccess' }
+    / "=" { return 'Assign' }
+
+  AssignOpUnary 
+    = "++" { return 'AssignInc' }
+    / "--" { return 'AssignDec' }
+    
+
+Assignment 'assignment'
+  = AssignConstant
   / AssignmentSuccess
-  / AssignmentScoreboard 
-  / math_scoreboard
-  / AssignmentDatapath 
-  / AssignmentBossbar
-
-
-  
-  
-  scale =  scale:(@typed_number _ "*" _)? {
-    return N('assignment_scale',{scale})
-  }
-
-  AssignmentScoreboard 
-    = left:lhand_scoreboard EQUALS rhand:rhand_scoreboard {
-        return N('AssignmentScoreboard',{left,...rhand})
-      }
-    / math_scoreboard
+  / Assign
 
     lhand_scoreboard
       = var_id / score_id
 
-    rhand_scoreboard 
-      = right:bossbar_prop_int { return { type:'bossbar',right } }
-      / scale:(@float _ "*" _ )? right:datapath { return { type:'datapath',scale,right } }
-      / right:int !(_ "*") { return { type:'value', right } }
-      / right:Instructable { return { type:'statement',right } }
-      / "test" __ right:Conditionals { return { type:'test',right } }
-      / right:lhand_scoreboard { return { type:'scoreboard',right } }
-       
-
-  AssignmentDatapath 
-    = left:datapath EQUALS rhand:rhand_datapath {
-        return N('AssignmentDatapath',{left,...rhand})
-      }
-
-    rhand_datapath 
-      = right:datapath { return { type:'datapath',right } }
-      / scale:scale "test" __ right:Conditionals { return { type:'test', scale, right } }
-      / right:typed_value !(_ "*") { return { type:'value', right } }
-      / scale:scale right:Instructable { return { type:'statement',scale,right } }
-      / scale:scale right:bossbar_prop_int { return { type:'bossbar',scale,right } }
-      / scale:scale right:lhand_scoreboard { return { type:'scoreboard',scale,right } }
-    
-  AssignmentBossbar 
-    = left:bossbar_prop_bool EQUALS right:bool {
-        return N('AssignmentBossbar',{left,type:'value',right})
-      }
-    / left:bossbar_prop_json EQUALS right:value {
-        return N('AssignmentBossbar',{left,type:'json',right})
-      }
-    / left:bossbar_prop_keyword EQUALS right:ident {
-        return N('AssignmentBossbar',{left,type:'value',right})
-      }
-    / left:bossbar_prop_selector EQUALS right:selector {
-      return N('AssignmentBossbar',{left,type:'value',right})
-    } 
-    / left:lhand_bossbar EQUALS rhand:rhand_bossbar {
-        return N('AssignmentBossbar',{left,...rhand})
-      }
-    
-    bossbar_prop_bool 
-      = "bossbar" __ id:resloc __ prop:("visible") {
-          return N('assignment_bossbar_prop',{id,prop})
-        }
-
-    bossbar_prop_int
-      = "bossbar" __ id:resloc __ prop:("max"/"value"/"visible"/"players") {
-          return N('assignment_bossbar_prop',{id,prop})
-        }
-
-    bossbar_prop_keyword
-    = "bossbar" __ id:resloc __ prop:("style"/"color") {
-        return N('assignment_bossbar_prop',{id,prop})
-      }
-    bossbar_prop_json
-    = "bossbar" __ id:resloc __ prop:("name") {
-        return N('assignment_bossbar_prop',{id,prop})
-      }
-    bossbar_prop_selector
-    = "bossbar" __ id:resloc __ prop:("players") {
-        return N('assignment_bossbar_prop',{id,prop})
-      }
-  
     lhand_bossbar 
     = "bossbar" __ id:resloc __ prop:("max"/"value"/"visible") {
         return N('assignment_bossbar_prop',{id,prop})
       }
     
-    rhand_bossbar 
-      = rhand_scoreboard    
-
+ 
   AssignmentSuccess
     = lhand:lhand_success _ "?=" _ rhand:rhand_success {
       return N('AssignmentSuccess',{...lhand,...rhand})
@@ -231,28 +299,63 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       }
 
     rhand_success 
-      = right:Instructable { return { type:'statement',right } }
+      = right:Instruction { return { type:'statement',right } }
       / "test" __ right:Conditionals { return { type:'test', right } }
 
  
     
     
-  AssignmentArg 
+  AssignConstant 
     = name:arg_name EQUALS value:arg_value {
-      return N('AssignmentArg',{name,value})
+      return N('declare_constant',{name,value})
     }
 
 
 
+MinityCommand
+  = "say" 
+    __ line:raw_line {
+      return I('CmdSay',{line})
+    }
+  / "print" 
+    __ line:raw_line {
+      return I('CmdPrint',{line})
+    }
+  / "tell" 
+    __ selector:ValueSelector
+    __ line:raw_line {
+      return I('CmdTell',{selector,line})
+    }
+  / "append"
+    __ left:ValueNode
+    __ right:ValueNode {
+      return I('Append',{left,right})
+    }
+  / "prepend"
+    __ left:ValueNode
+    __ right:ValueNode {
+      return I('Prepend',{left,right})
+    }
+  / "merge"
+    __ left:ValueNode
+    __ right:ValueNode {
+      return I('Merge',{left,right})
+    }
+  / "insert"
+    __ index:ValueNode
+    __ left:ValueNode
+    __ right:ValueNode {
+      return I('Merge',{index,left,right})
+    }
+  / "remove"
+    __ left:ValueNode {
+      return I('Remove',{left})
+    }    
 
-
-
-
-//\\ native commands
-
-  command = "/" command:command_parts {
-    return N('command', { command  } )
-  }
+NativeCommand 
+  = "/" command:command_parts {
+      return I('NativeCommand', { command  } )
+    }
 
   command_parts
     = parts:command_part* {
@@ -286,6 +389,11 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       }
       
 //\\ minity commands
+
+WrappedCommand
+  = command:cmd {
+    return I('NativeCommand',{command})
+  }
   cmd 
   = "summon" 
     pos:(_ @Position)? 
@@ -314,7 +422,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     }
   / "after" __ time:float unit:[tds]? 
     statements:Instructions 
-    then:(__ "then" @Instruction)? {
+    then:(__ "then" @Instructable)? {
       return N('cmd_after', { time, unit: (unit ?? "t"), statements, then } )
     } 
   / "bossbar" 
@@ -338,44 +446,19 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     __ tag:tag_id  {
       return N('tag_unset',{selector,tag})
     }
-  / "say" 
-    __ parts:command_parts {
-    return N('cmd_say',{parts})
-  }
-  / modify:("merge"/"append"/"prepend") __ left:datapath __ right:typed_value {
-      return N('datapath_modify_value',{modify,left,right})
-    }
-  / modify:("merge"/"append"/"prepend") __ left:datapath __ right:datapath {
-      return N('datapath_modify_datapath',{modify,left,right})
-    }
-  / modify:"insert"__ index:int __ left:datapath __ right:datapath {
-      return N('datapath_insert_datapath',{left,index,right})
-    }
-  / modify:"insert" __ index:int __ left:datapath __ right:typed_value {
-      return N('datapath_insert_value',{left,index,right})
-    }
-  / print
-  / delete_datapath 
-
-  //\\ print
-  print = "print" selector:(__ @selector)? __ line:raw_line {
-    return N('print',{selector,line})
-  }
+  
+  
 
 //\\ directives
-  Directive
+Directive
   =  "import" 
     __ file:string {
       return N('import',{file})
     } 
-  / "define" __ resloc:resloc __ value:value {
-    return N('DefineJson',{resloc,value})
+  / "define" __ resloc:ValueResLoc __ value:ValueLiteral {
+    return I('DefineJson',{resloc,value})
   }
     
-    
-    
-
-
 //\\ execute
  
   mod_arg_axes 
@@ -490,8 +573,8 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     condition_part = condition_tag/condition_brackets/condition_nbt
 
     condition_tag 'selector tag'
-    = CONCAT "." value:tag_id { return [N('cond_brackets', { name:'tag', op:'include', value }) ]  }
-    / CONCAT "!" value:tag_id  { return [N('cond_brackets', { name:'tag', op:'exclude', value }) ]   }
+    = CONCAT "." tag:tag_id { return [N('cond_tag', { op:'include', tag }) ]  }
+    / CONCAT "!" tag:tag_id  { return [N('cond_tag', { op:'exclude', tag }) ]   }
 
     condition_nbt 'selector nbt'
       = CONCAT value:object {
@@ -659,53 +742,9 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     = var_id 
     / constant_id 
     / score_id
-
-
-  
   
   score_criterion 'criterion'
     = $([a-z]i [a-z0-9.:_-]i+)
-  
-  //\\ assign_scoreboard
-    math_scoreboard
-      = left:scoreboard_lhand _ 
-          assign: (
-            op:"+=" _ right:int {
-              return N('assign_scoreboard_add', { right } )
-            }
-          / op:"-=" _ right:int {
-              return N('assign_scoreboard_remove', { right } )
-            }
-          / op:assign_scoreboard_op _ right:scoreboard_id {
-              return N('assign_scoreboard_operation', { op, right } )
-            }
-          / op:("><"/"<=>") _ right:scoreboard_lhand {
-              return N('assign_scoreboard_operation', { op:'><', right } )
-            }
-          / "++" {
-              return N('assign_scoreboard_inc',{})
-            }
-          / "--" {
-              return N('assign_scoreboard_dec',{})
-            }
-        ) {
-          assign.left = left;
-          return assign;
-        } 
-    scoreboard_lhand 
-      = var_id
-      / score_id
-      
-
-    assign_scoreboard_op 
-      = "+="
-      / "-="
-      / "*="
-      / "/="
-      / "%="
-      / ("<=" / "<") { return "<" }
-      / (">=" / ">") { return ">" }
-      
 
 
   //\\ test_scoreboard
@@ -721,7 +760,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       = left:scoreboard_id _ "!=" _ right:scoreboard_id {
           return N('test_scoreboard',{left,op:"=",right})
         }
-      / id:scoreboard_lhand  {
+      / id:lhand_scoreboard  {
           return N('test_scoreboard_zero',{id})
         }
         
@@ -834,10 +873,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       
  
 
-    delete_datapath 
-      = ("delete"/"remove") __ path:datapath {
-        return N('delete_datapath', { path } )
-      }
+    
 
 //\\ block_spec
   block_spec 'block predicate'
@@ -861,7 +897,25 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 
 
 //\\ parts
-  
+
+  ValueResName 
+    = head:ident tail:("/" @ident)* {
+        return V('ResLoc',{ nameParts:[head,...tail] })
+      }
+
+
+  ValueResLoc 
+    = ns:(@ident ":")? 
+      head:ident tail:("/" @ident)* {
+        return V('ResLoc',{ ns, nameParts:[head,...tail] })
+      }
+
+  ValueResTag 
+    = "#" ns:(@ident ":")? 
+      head:ident tail:("/" @ident)* {
+        return V('ResTag',{ ns, nameParts:[head,...tail] })
+      }
+
   resname = head:ident tail:("/" @ident)* {
     return N('resname',{parts:[head,...tail]})
   }
@@ -1093,7 +1147,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       / "false" {
           return N('number_lit', { type:'int',value:0,suffix:"b" } )
         }
-      / value:INT suffix:[bsli]? {
+      / value:INT suffix:[bsli]i? {
           return N('number_lit', { type:'int',value:+value,suffix } )
         }
 
@@ -1111,10 +1165,10 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 
     
     typed_float_lit 
-      = value:FLOAT suffix:[fd]? {
+      = value:FLOAT suffix:[fd]i? {
           return N('number_lit', { type:'float',value:+value,suffix:suffix||"f" } )
         } 
-      / value:INT suffix:[fd] {
+      / value:INT suffix:[fd]i {
           return N('number_lit', { type:'float',value:+value,suffix } )
         }
         
@@ -1634,23 +1688,28 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       }
   Statement 
     = statement:(
-      Instructable / Execution / Declaration
+      Instruction / Declaration
     ) {
         statement.text = text();
         return statement;
       }
-  Instructable 
-    = BlockArg 
-    / Construct
-    / PromiseCall 
-    / math_scoreboard
+  Instruction 
+    = Execution 
+    / BlockArg 
+    / command: Construct {
+        return I('NativeCommand',{command})
+      }
     / Assignment 
-    / command 
-    / cmd 
+
+    / NativeCommand 
+    / MinityCommand
+    / WrappedCommand
      
     / CallSelf 
-    / FunctionTagCall
-    / MacroCall 
+    / CallFunctionTag
+    / command: MacroCall {
+          return I('NativeCommand',{command})
+      }
 
 
 
@@ -1660,14 +1719,13 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
   AnonFunctionResloc = BEGIN statements:Statements END {
       return N( 'AnonFunctionResloc', { statements } )
   }
-  Instruction 
+  Instructable 
     = CodeBlock
-    / (__ @Execution)
-    / (__ @Instructable)
+    / (__ @Instruction)
   
   Instructions 
     = Braces
-    / instruction:(__ @Execution / __ @Instructable) {
+    / instruction:(__ @Instruction) {
       return [instruction]
    }
   
@@ -1679,7 +1737,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     = modifiers:Modifiers executable:Executable {
       return N( 'Execution', { modifiers, executable } )
   }
-  Executable = last:(CodeBlock / (__ @Instructable)) {
+  Executable = last:Instructable {
       return N( 'Executable', { last } )
   }
   Modifiers 
@@ -1729,14 +1787,14 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
   }
 //\\ construct  
   Construct 
-    = arg:Conditionals then:Instruction 
-        otherwise:(__ "else" @Instruction)? {
+    = arg:Conditionals then:Instructable 
+        otherwise:(__ "else" @Instructable)? {
         return N('StructureIfElse', { arg, then, otherwise } )
       }
     / "repeat" mods:(__ @mods:Modifiers)? 
       statements:Braces? 
       __ conds:LoopConditionals 
-      then:(__ "then" @Instruction)? {
+      then:(__ "then" @Instructable)? {
         if (mods) return N('StructureRepeatMods',{mods,statements,conds,then})
         return N('StructureRepeat',{statements,conds,then})
       }
@@ -1744,15 +1802,18 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     / "every" __ time:float unit:[tds]? 
       statements:Instructions 
       conds:(__ @LoopConditionals)?
-      then:(__ "then" @Instruction)?{
+      then:(__ "then" @Instructable)?{
         return N('every_until',{statements,conds,time,unit,then})
       } 
     / "every" __ time:float unit:[tds]? 
       conds:(__ @LoopConditionals)
-      then:(__ "then" @Instruction) {
+      then:(__ "then" @Instructable) {
         return N('every_until',{conds,time,unit,then})
       }
-
+    / head:Promise tail:(__ "and" __ @Promise)* 
+      clauses: ThenCatchClause {
+        return N('PromiseCall',{promises:[head,...tail],...clauses})
+      } 
 
 //\\ conditionals
 
@@ -1797,11 +1858,6 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
         return N('MacroCallSpec', {ns, name, args})
       }
 
-  PromiseCall
-    = head:Promise tail:(__ "and" __ @Promise)* 
-      clauses: ThenCatchClause {
-        return N('PromiseCall',{promises:[head,...tail],...clauses})
-      } 
 
   Promise
     = "when" __ @PromiseTrue
@@ -1820,17 +1876,21 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     return {then,_catch}
   }
 
-  ThenClause = __ "then" __ @Instruction
-  CatchClause = __ "catch" __ @Instruction
+  ThenClause = __ "then" __ @Instructable
+  CatchClause = __ "catch" __ @Instructable
   
 
   BlockArg
     = "resolve" _ "(" _ ")" {
-        return N('BlockArgThen')
+        return I('Reject')
       }
     / "reject" _ "(" _ ")"  {
-        return N('BlockArgElse')
+        return I('Resolve')
       }
+
+  CallSelf = "self" _ "(" _ ")" {
+    return I('CallSelf', {} )
+  }
 
 //\\ function
 
@@ -1839,21 +1899,16 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
       return N('FunctionCall', { resloc } )
     }
 
-  FunctionTagCall
+  CallFunctionTag
     =  restag:restag _ OPEN _ CLOSE {
-      return N('FunctionTagCall', { restag } )
+      return I('CallFunctionTag', { restag } )
     }
 
   FunctionCallResloc = !RESERVED @resloc:resloc_or_tag _ OPEN _ CLOSE 
-
-
-  CallSelf = "self" _ "(" _ ")" {
-    return N('CallSelf', {} )
-  }
-
+  
   DeclareFunction 
-    = "function" __ name:resname tags:(__ @restag)* (_ OPEN CLOSE _)? statements:Braces {
-        return N('DeclareFunction', { name,tags,statements } )
+    = "function" __ resloc:ValueResName tags:(__ @ValueResTag)* (_ OPEN CLOSE _)? statements:Braces {
+        return I('DeclareFunction', { resloc,tags}, {statements } )
     }
 
   

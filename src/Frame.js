@@ -9,7 +9,8 @@ const { randomString, resolveModulePath } = require("./utils.js");
 const { existsSync } = require("fs");
 const { isNbt, toNbt, toSnbt, toJson } = Nbt;
 
-  
+const print = console['log']
+
 const Frame = exports.Frame =
   class Frame extends Function {
     constructor() {
@@ -38,17 +39,17 @@ const Frame = exports.Frame =
     transform = (node,...args) => {
       if (isNbt(node)) return toNbt(node);
       if (!node?.transform) {
-        console.log(node);
+        print(node);
         let e = new Error("WTF")
-        console.log(e.stack);
+        print(e.stack);
         process.exit(-1);
       }
       const ret = node.transform(this,...args);
       if (process.env.DEBUG) {
         if (typeof ret === 'object') {
-          console.log((node.$ + " ").padEnd(24, "_"), '=> [obj]', JSON.stringify(ret));
+          print((node.$ + " ").padEnd(24, "_"), '=> [obj]', JSON.stringify(ret));
         } else {
-          console.log((node.$ + " ").padEnd(24, "_"), '=>', "" + ret);
+          print((node.$ + " ").padEnd(24, "_"), '=>', "" + ret);
         }
       }
       return ret;
@@ -68,8 +69,8 @@ const Frame = exports.Frame =
     getMacro = (ns,name) => {
       return this.result.getMacro(ns||this.ns,name);
     }
-    setArg = (name,value)=> this.SCOPE.setArg(name,value)
-    getArg = (name,type="value")=> this.SCOPE.getArg(name,type)
+    setArg = (name,value)=> this.scope.setArg(name,value)
+    getArg = (name,type="value")=> this.scope.getArg(name,type)
     macroExists = (ns,name) => {
       return this.result.macroExists(ns||this.ns,name);
     }
@@ -142,22 +143,16 @@ const Frame = exports.Frame =
       return constant.id;
     }
 
-    declareVar = (name) => this.SCOPE.declareVar(name)
-    varTarget = (name) => this.SCOPE.varTarget(name);
-    varObjective = (name) => this.SCOPE.varObjective(name);
-    varId = (name) => this.SCOPE.varId(name)
-
-    declareScore = (name, criterion) => this.SCOPE.declareScore(name,criterion)
-    scoreObjective = name => this.SCOPE.scoreObjective(name)
-    scoreCriterion = name => this.SCOPE.scoreCriterion(name)
-    declareTag = name => this.SCOPE.declareTag(name)
-    tagId = name => this.SCOPE.tagId(name)
-
+    scoreboardConstant = value => {
+      const constant = this.result.addConstant(value);
+      return constant.id;
+    }
+    
     makeResloc = (ns,name,def=this.ns) => {
       if (ns) {
-        assert(name.match(/^[_a-z10-9./]+$/),`bad resource location ${ns}:${name}`)
+        assert(name.match(/^#?[_a-z10-9./]+$/),`bad resource location ${ns}:${name}`)
       } else {
-        assert(name.match(/^([_a-z10-9./]+:)?[_a-z10-9./]+$/),`bad resource location ${ns}:${name}`)
+        assert(name.match(/^(#?[_a-z10-9./]+:)?[_a-z10-9./]+$/),`bad resource location ${ns}:${name}`)
         if (name.match(/:/)) {
           ([ns,name] = name.split(/:/))
         }
@@ -183,7 +178,7 @@ Frame.Root = class FrameRoot extends Frame {
     this.root = this;
     this.result = result ?? new Result();
     this.checkErrors = checkErrors;
-    //this.SCOPE = new Scope(null,{args})
+    //this.scope = new Scope(null,{args})
   }
   
   macros = {};
@@ -215,7 +210,7 @@ Frame.Child = class FrameChild extends Frame {
 
 Frame.Generic = class GenericFrame extends Frame.Child {
   constructor(parent, { ...rest }) {
-    super(parent, { ...rest, scope:true });
+    super(parent, { ...rest });
     Object.assign(this, this.extra(rest))
     this.resloc = this.fnNamespace+":"+this.fnName;
     const lines = this.statements.map(this.transform);
@@ -226,7 +221,7 @@ Frame.Generic = class GenericFrame extends Frame.Child {
 Frame.Namespace = class NamespaceFrame extends Frame.Generic {
   extra ({statements}) {
     return {
-      SCOPE: this.namespace.SCOPE,
+      scope: this.namespace.scope,
       fnNamespace: "zzz_minity",
       fnName: this.ns+"/load_"+this.result.blockCount++,
       prefix: "--" + this.ns + "-",
@@ -240,7 +235,7 @@ Frame.Function = class FunctionFrame extends Frame.Generic {
     const prefix = "--" + this.ns + "-" + name + "-"
     const {namespace} = this
     return {
-      SCOPE: new Scope(this.parent.SCOPE,{prefix,namespace}),
+      scope: new Scope(this.parent.scope,{prefix,namespace}),
       fnNamespace: this.ns,
       fnName: name,
       prefix,
@@ -254,7 +249,7 @@ Frame.Macro = class MacroFrame extends Frame.Generic {
     const prefix = "--" + this.ns + "-" + name + "-"
     const {namespace} = this
     return {
-      SCOPE: new Scope(this.parent.SCOPE,{prefix,namespace,args}),
+      scope: new Scope(this.parent.scope,{prefix,namespace,args}),
       fnNamespace: "zzz_minity",
       fnName: this.ns+"/"+name+"_"+this.result.blockCount++,
       reject,
