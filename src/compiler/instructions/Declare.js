@@ -10,7 +10,7 @@ const {CompilerInstruction} = require("./CompilerInstruction")
 const Declare = exports.Declare = class Declare extends CompilerInstruction {
   [DECLARE] = ()=>{};
   [CODE] = () => {
-    this[DECLARE]();
+    return ""
     return `#DECLARE ${this.describe}`
   };
 }
@@ -29,7 +29,6 @@ const DeclareScore = exports.DeclareScore = class DeclareScore extends DeclareSc
   constructor({criterion,...rest}) {
     super(rest)
     this.criterion = criterion || 'dummy'
-    console.log('dcekara',this.name,this.criterion)
   };
   [DECLARE] = () => this.frame.scope.scores.declare(this.name,{criterion:this.criterion});
 }
@@ -46,21 +45,30 @@ const DeclareVar = exports.DeclareVar = class DeclareVar extends DeclareScoped {
   }
   [DECLARE] = () => this.frame.scope.vars.declare(this.name); 
   [CODE] = () => {
-    this[DECLARE]();
     if (!this.value) return "";
     const newVar = this.frame.scope.vars.create(this.name)
     return `scoreboard players set ${newVar.code} ${0|this.value}`
   }
 }
 
-const DeclareMacro = exports.DeclareMacro = class DeclareMacro extends Declare {
-  [DECLARE] = () => this.frame.declareMacro(this.name, this.args, this.statements);
-  constructor ({name,args,statements,...rest}) {
-    console.log('declaring?',{name,args,statements})
+const DeclareConstant = exports.DeclareConstant = class DeclareConstant extends DeclareScoped {
+  constructor ({value,...rest}) {
     super(rest);
+    this.value = value
+  }
+  [DECLARE] = () => this.frame.scope.constants.declare(this.name,{value:this.value}); 
+}
+
+
+const DeclareMacro = exports.DeclareMacro = class DeclareMacro extends Declare {
+  [DECLARE] = () => {
+    this.frame.declareMacro(this.name, this.args, this.statements);
+  }
+  constructor ({name,args,statements,...rest}) {
+    super(rest);
+    this.name = name
     this.args = args
     this.statements = statements
-    this.name = name
   }
 }
 
@@ -89,5 +97,16 @@ const DefineJson = exports.DefineJson  = class DefineJson extends Declare {
   [DECLARE] = () => {
     const {resloc:{ns,name},value} = this
     this.frame.defineJson(ns||this.frame.ns,name,value.value)
+  }
+}
+
+const Import = exports.Import  = class Import extends Declare {
+  constructor ({file,...rest}) {
+    super(rest);
+    this.file = file
+    this.frame.importFile(String(this.file))
+  };
+  [DECLARE] = () => {
+    //this.frame.importFile(String(this.file))
   }
 }

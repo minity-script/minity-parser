@@ -25,11 +25,11 @@ const DataPath = class DataPath extends CompilerValue {
   [OUTPUT] = {
     ...this[OUTPUT],
     datapath: () => this.code,
-    getter: () => `data get ${this.code} 1`,
+    getter: () => `run data get ${this.code} 1`,
   };
 
   [OUTPUT_SCALED] = {
-    getter: (scale) => `data get ${this.code} ${scale}`,
+    getter: (scale) => `run data get ${this.code} ${scale}`,
   };
 
   [APPEND] = {
@@ -57,15 +57,15 @@ const DataPath = class DataPath extends CompilerValue {
   [ASSIGN] = {
     nbt: value => `data modify ${this.code} set value ${value}`,
     datapath: source => `data modify ${this.code} set from ${source}`,
-    getter: getter => `execute store result ${this.code} integer 1 run ${getter}`,
+    getter: getter => `execute store result ${this.code} int 1 ${getter}`,
   };
   
   [ASSIGN_SUCCESS] = {
-    getter: command => `execute store success ${this.code} run ${command}`
+    getter: getter => `execute store success ${this.code} ${getter}`
   };
 
   [ASSIGN_SCALED] = {
-    getter: (getter,scale,type) => `execute store result ${this.code} ${type} ${scale} run ${getter}`,
+    getter: (getter,scale,type) => `execute store result ${this.code} ${type} ${scale} ${getter}`,
   };
 
 }

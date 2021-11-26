@@ -29,7 +29,7 @@ class ScopeItems {
     this.cb = cb
   }
   get(name) {
-    console.log('get',this.itemArgs.prefix, this.ItemClass.describe(name), this.items[name])
+    //console.log('get',this.itemArgs.prefix, this.ItemClass.describe(name), this.items[name])
     if (name in this.items) return this.items[name];
     assert(this.parent, "Undeclared " + this.ItemClass.describe(name));
     return this.parent.get(name)

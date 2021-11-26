@@ -47,7 +47,7 @@ const ValueNode = exports.ValueNode = class ValueNode extends TreeNode {
   }
   transform = (frame, ...args) => {
     try {
-      const { children, values } = this;
+      const { children, values, location } = this;
       const args = {}
       for (const id in children) {
         const child = children[id];
@@ -58,7 +58,9 @@ const ValueNode = exports.ValueNode = class ValueNode extends TreeNode {
       for (const id in values) {
         args[id] = values[id]
       }
-      return this.ValueClass.create({frame, ...args})
+      const it = this.ValueClass.create({frame, location, ...args})
+      it.doDeclare && it.doDeclare()
+      return it
     } catch (e) {
       e.location ??= this.location;
       throw (e)
@@ -66,34 +68,4 @@ const ValueNode = exports.ValueNode = class ValueNode extends TreeNode {
   }
 }
 
-const InstructionNode = exports.InstructionNode = class InstructionNode extends TreeNode {
-  constructor($, location, children, values) {
-    super($, location)
-    this.children = children
-    this.values = values
-    this.InstructionClass = Compiler[this.$]
-    if (!this.InstructionClass) {
-      throw new MinityError("no instruction class for " + this.$, this.location);
-    }
-  }
-  transform = (frame, ...args) => {
-    try {
-      const { children, values } = this;
-      const args = {}
-      for (const id in children) {
-        const child = children[id];
-        if (Array.isArray(child)) args[id] = child.map(frame.transform)
-        else args[id] = child && frame.transform(child)
-      }
-      for (const id in values) {
-        args[id] = values[id]
-      }
-      const instruction = this.InstructionClass.create({frame, ...args})
-      return instruction.output('instruction');
-    } catch (e) {
-      e.location ??= this.location;
-      throw (e)
-    }
-  }
-}
-
+const InstructionNode = exports.InstructionNode = ValueNode

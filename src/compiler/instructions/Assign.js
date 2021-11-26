@@ -5,6 +5,7 @@ const {
   ASSIGN_SCALED,
   OUTPUT,
   OUTPUT_SCALED,
+  ASSIGN_SUCCESS,
   CODE
 } = require("../symbols");
 

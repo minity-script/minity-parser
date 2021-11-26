@@ -117,8 +117,18 @@ class ResultNamespace {
     return this.functions[fn.name] = fn;
   }
   addAnonFunction(self, content,prefix="") {
-    const id = prefix+"_"+this.result.blockCount++;
-    return this.main.addFunction(self,[this.ns,id],content);
+    if (typeof content !== 'function' ) {
+      const cacheKey = JSON.stringify(content)
+      if(!this.cache[cacheKey]) {
+        const id = prefix+"_"+this.result.blockCount++;
+        this.cache[cacheKey] = this.main.addFunction(self,[this.ns,id],content);
+      }
+      return this.cache[cacheKey]
+    } else {
+      const id = prefix+"_"+this.result.blockCount++;
+      return this.main.addFunction(self,[this.ns,id],content);
+    }
+    
   }
   addJson(name, obj) {
     let id = [].concat(name).join("/");
@@ -132,6 +142,7 @@ class ResultNamespace {
       ...Object.values(this.functions)
     ]
   }
+  cache = {}
 }
 
 ResultNamespace.Internal = ResultNamespace
@@ -169,6 +180,9 @@ class ResultFile {
     this.ns = namespace.ns
     this.parts = [].concat(name);
     this.ext = ext;
+    if (typeof content=='function') {
+      content = content(this.resloc)
+    }
     this._content = content;
   }
 
@@ -210,17 +224,8 @@ class ResultFunction extends ResultFile {
   }
     
   get text() {
-    return this.content.filter(Boolean).map(line=>{
-      if (Array.isArray(line)) {
-        return line.map(part=>{
-          if (part == Symbol.for("callSelf")) {
-            return "function "+this.self;
-          }
-          return part;
-        }).join("");
-      }
-      return line;
-    }).join("\n");
+    //console.log(this.content)
+    return this.content.join("\n");
   }
 
   addTag(ns, tag) {
@@ -291,6 +296,7 @@ class ResultMacro {
       const { Frame } = require('./Frame')
       const C = new Frame.Macro(parent,{name,args,statements,resolve,reject})
       cache[cache_id] =C.fn
+    } else {
     }
     return cache[cache_id]
   }

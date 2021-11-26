@@ -47,7 +47,7 @@ const Frame = exports.Frame =
       const ret = node.transform(this,...args);
       if (process.env.DEBUG) {
         if (typeof ret === 'object') {
-          print((node.$ + " ").padEnd(24, "_"), '=> [obj]', JSON.stringify(ret));
+          print((node.$ + " ").padEnd(24, "_"), '=> [obj]', JSON.stringify(ret).substr(0,100));
         } else {
           print((node.$ + " ").padEnd(24, "_"), '=>', "" + ret);
         }
@@ -110,8 +110,14 @@ const Frame = exports.Frame =
     }
 
     ifElse = (checks, thenCode, elseCode) => {
+      if (!elseCode) {
+        return [
+          `execute ${checks} run ${thenCode}`
+        ]
+      }
       const stack = `storage zzz_minity:${this.ns} stack`;
       const top = `${stack}[-1]`;
+
       return [
         `data modify ${stack} append value [B;]`,
         `execute ${checks} run data modify ${top} append value 1b`,
@@ -213,8 +219,13 @@ Frame.Generic = class GenericFrame extends Frame.Child {
     super(parent, { ...rest });
     Object.assign(this, this.extra(rest))
     this.resloc = this.fnNamespace+":"+this.fnName;
-    const lines = this.statements.map(this.transform);
-    this.fn = this.result.addFunction(this.fnNamespace, this.resloc, this.fnName, lines);
+
+
+    const res = this.transform(this.statements);
+    //console.log({res})
+    //res.doDeclare();
+    const lines = res.getCode();
+    this.fn = this.result.addFunction(this.fnNamespace, this.resloc, this.fnName, res.getCode());
   }
 }
 

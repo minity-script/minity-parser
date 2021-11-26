@@ -1,21 +1,44 @@
 const assert = require("assert");
+const {basename}=require('path')
 const { CompilerNode } = require("../CompilerNode");
 const {
   OUTPUT,
-  CODE
+  CODE,
+  DECLARE
 } = require("../symbols");
 
 const CompilerInstruction = exports.CompilerInstruction = class CompilerInstruction extends CompilerNode {
   makeInstruction = () => {
-    const code = [].concat(this[CODE]()).filter(Boolean);
+    const code = this.getCode();
     if (code.length==0) return ""
     if (code.length == 1) return code[0]
-    return this.frame.anonFunction(code)
+    const {file,start:{line}} = this.location;
+    return this.frame.anonFunction([
+      `# ${basename(file)}:${line}`,
+      ...code
+    ])
+  };
+  getCode = () => {
+    const code = [].concat(this[CODE]()).filter(Boolean);
+    for (const line of code) {
+      if (typeof line === 'object') {
+        console.log(line?.describe)
+        throw new Error("WQR")
+        process.exit(-1)
+      }
+    }
+    
+    return code;
+  };
+  doDeclare = () => {
+    //console.log('doDeclare',this.describe)
+    return this[DECLARE]();
   };
   [CODE] = () => [];
+  [DECLARE] = () => [];
   [OUTPUT] = {
     instruction: this.makeInstruction,
-    getter: this.makeInstruction
+    getter: ()=> `run ${this.makeInstruction()}`
   }
 }
 
@@ -31,6 +54,7 @@ const BinaryInstruction = exports.BinaryInstruction = class BinaryInstruction ex
     this.left = left;
     this.right = right;
   };
+  
   [CODE] = () => {
     const left = this.left[this.leftProp]
     this.assert(left, "invalid lvalue " + left?.describe)

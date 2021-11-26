@@ -27,8 +27,7 @@ module.exports = {
   INSERT: Symbol.for("INSERT"),
   REMOVE: Symbol.for("REMOVE"),
 
-  MOD_AS: Symbol.for("MOD_AS"),
-
+  MOD_ARG: Symbol.for("MOD_ARG"),
 }
 
 

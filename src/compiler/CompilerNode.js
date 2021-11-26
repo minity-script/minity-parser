@@ -10,8 +10,9 @@ const CompilerNode = exports.CompilerNode = class CompilerNode {
   static create (...args) {
     return new this(...args)
   }
-  constructor({frame}) {
+  constructor({frame,location}) {
     this.frame = frame
+    this.location = location
   }
   output = outputType => {
     this.assert (this.canOutput(outputType),"cannot output as "+outputType)

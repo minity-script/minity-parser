@@ -8,6 +8,9 @@
     }
     return ($,...args) => {
       const loc = location();
+      const {file} = options;
+      //console.log({file})
+      loc.file = file;
       const node = fn($,loc,...args)
       return node;  
     }
@@ -23,9 +26,43 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 }
 //\\ globals
   DeclareNamespace 
-    = "namespace" __ ns:IDENT EOL globals:globals {
-        return N('DeclareNamespace',{ns,globals})
+    = "namespace" __ ns:IDENT EOL statements:Globals {
+        return N('DeclareNamespace',{ns,statements})
       }
+
+  DeclareFunction 
+    = "function" 
+      __ resloc:ValueResName 
+      tags:(__ @ValueResTag)* 
+      (_ OPEN CLOSE _)? 
+      BEGIN statements:NonGlobals END  {
+          return I('DeclareFunction', { resloc, tags}, { statements } )
+      }
+
+  DeclareMacro 
+    = "macro" 
+      __ name:IDENT 
+      args:macro_args 
+      BEGIN statements:NonGlobals END {
+        return V('DeclareMacro', {},{ name, args, statements  } )
+      }
+
+  Globals 
+    = head:global tail:(EOL @global)* {
+        return V('Statements',{statements:[head,...tail]})
+      }
+  
+  NonGlobals 
+    = head:Statement tail:(EOL @Statement)* {
+        return V('Statements',{statements:[head,...tail]})
+      }
+
+  BlockStatements  
+    = BEGIN @NonGlobals END  
+
+  StatementOrBlock
+    = BlockStatements / __ @Instruction
+
 
   globals 
     = head:global tail:(EOL @global)* {
@@ -44,11 +81,18 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
   DeclareEvent 
     = "on" 
       __ trigger:resloc_mc conditions:(CONCAT @object) 
-      __ "then" then:Instructions {
+      __ "then" then:StatementOrBlock {
         return N('DeclareEvent',{trigger,conditions,then})
       }
 
-
+Directive
+  =  "import" 
+    __ file:string {
+      return I('Import',{file})
+    } 
+  / "define" __ resloc:ValueResLoc __ value:ValueLiteral {
+    return I('DefineJson',{resloc,value})
+  }
 //\\ compile-time constant
 
   arg_name 'macro argument'
@@ -56,12 +100,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 
   arg_value 
     = typed_value
-//\\ define macro
 
-DeclareMacro 
-  = "macro" __ name:IDENT args:macro_args statements:Braces {
-      return I('DeclareMacro', {},{ name, args,statements  } )
-    }
 
   //\\ macro_args
     macro_args = OPEN head:macro_arg tail:(COMMA @macro_arg)* CLOSE {
@@ -79,8 +118,8 @@ DeclareMacro
 //\\ macro call
 
 MacroCall
-  = ns:(@NAME ":")? name:NAME _ OPEN args:call_args? CLOSE {
-      return N('MacroCall', { ns, name, args } )
+  = resloc:ValueResLoc _ OPEN args:call_args? CLOSE {
+      return V('MacroCall', { resloc}, { args } )
     }
       
   //\\ call_args
@@ -164,8 +203,8 @@ ValueNode
     / ValueDataPath
 
   RValue
-    = ValueNode
-    / ValueNativeCommand
+    = Instruction
+    / ValueNode
 
   ValueDataPath
     = ValueDataPathStorage
@@ -260,7 +299,7 @@ Assign
     / "%=" { return 'AssignMod' }
     / ">=" { return 'AssignGT' }
     / "<=" { return 'AssignLT' }
-    // "?=" { return 'AssignSuccess' }
+    / "?=" { return 'AssignSuccess' }
     / "=" { return 'Assign' }
 
   AssignOpUnary 
@@ -270,7 +309,6 @@ Assign
 
 Assignment 'assignment'
   = AssignConstant
-  / AssignmentSuccess
   / Assign
 
     lhand_scoreboard
@@ -307,7 +345,7 @@ Assignment 'assignment'
     
   AssignConstant 
     = name:arg_name EQUALS value:arg_value {
-      return N('declare_constant',{name,value})
+      return I('DeclareConstant',{value},{name})
     }
 
 
@@ -400,8 +438,8 @@ WrappedCommand
     __ 
     type:resloc_mc CONCAT 
     nbt:(@object)? 
-    then:(__ "then" __ @Instructions )? {
-      return N('cmd_summon', { pos,type,nbt, then } )
+    then:(__ "then" __ @StatementOrBlock )? {
+      return N('cmd_summon', { pos, type, nbt, then } )
     }
   / "give" 
     selector:cmd_arg_selector_optional 
@@ -420,11 +458,6 @@ WrappedCommand
     mode: (__ @("destroy"/"keep"/"replace"))? {
       return N('cmd_setblock', { pos, block, mode } )
     }
-  / "after" __ time:float unit:[tds]? 
-    statements:Instructions 
-    then:(__ "then" @Instructable)? {
-      return N('cmd_after', { time, unit: (unit ?? "t"), statements, then } )
-    } 
   / "bossbar" 
     __ "add" 
     __ id:resloc 
@@ -450,14 +483,7 @@ WrappedCommand
   
 
 //\\ directives
-Directive
-  =  "import" 
-    __ file:string {
-      return N('import',{file})
-    } 
-  / "define" __ resloc:ValueResLoc __ value:ValueLiteral {
-    return I('DefineJson',{resloc,value})
-  }
+
     
 //\\ execute
  
@@ -505,10 +531,6 @@ Directive
   	= OPEN @rot_angle CLOSE
     / __ @rot_angle
     
-  cmd_arg_function
-    = AnonFunctionResloc
-    / FunctionCallResloc
-
   cmd_arg_selector_optional = spec:(__ @selector_spec)? {
     return N('selector_optional', { spec } )
   }
@@ -905,15 +927,30 @@ Directive
 
 
   ValueResLoc 
-    = ns:(@ident ":")? 
-      head:ident tail:("/" @ident)* {
-        return V('ResLoc',{ ns, nameParts:[head,...tail] })
+    = spec:resloc_spec {
+        return V('ResLoc', spec)
       }
 
   ValueResTag 
-    = "#" ns:(@ident ":")? 
+    = "#" spec:resloc_spec {
+        return V('ResTag', spec)
+      }
+
+  ValueResLocMc
+    = spec:resloc_spec {
+        return V('ResLoc', spec,{ defaultNs:'minecraft'})
+      }
+
+  ValueResTagMc
+    = "#" spec:resloc_spec {
+        return V('ResTag', spec,{ defaultNs:'minecraft'})
+      }
+
+
+  resloc_spec
+    = ns:(@ident ":")? 
       head:ident tail:("/" @ident)* {
-        return V('ResTag',{ ns, nameParts:[head,...tail] })
+        return { ns, nameParts:[head,...tail] }
       }
 
   resname = head:ident tail:("/" @ident)* {
@@ -1694,127 +1731,120 @@ Directive
         return statement;
       }
   Instruction 
-    = Execution 
+    = Execution
     / BlockArg 
-    / command: Construct {
-        return I('NativeCommand',{command})
-      }
+    / Construct
+    / WrappedConstruct
+    
+    / CallSelf 
+    / CallFunctionTag
+    / MacroCall 
+
     / Assignment 
 
     / NativeCommand 
     / MinityCommand
     / WrappedCommand
      
-    / CallSelf 
-    / CallFunctionTag
-    / command: MacroCall {
-          return I('NativeCommand',{command})
-      }
+    
 
 
-
-  CodeBlock = BEGIN statements:Statements END {
-      return N( 'CodeBlock', { statements } )
-  }
-  AnonFunctionResloc = BEGIN statements:Statements END {
-      return N( 'AnonFunctionResloc', { statements } )
-  }
-  Instructable 
-    = CodeBlock
-    / (__ @Instruction)
   
-  Instructions 
-    = Braces
-    / instruction:(__ @Instruction) {
-      return [instruction]
-   }
-  
-  Braces = BEGIN @statements:Statements END 
-
 //\\ execution context modifiers
 
-  Execution 
-    = modifiers:Modifiers executable:Executable {
-      return N( 'Execution', { modifiers, executable } )
-  }
-  Executable = last:Instructable {
-      return N( 'Executable', { last } )
+Execution 
+    = mods:Modifiers executable:StatementOrBlock {
+      return V( 'Execute', { mods, executable } )
   }
   Modifiers 
     = head:Modifier tail:(__ @Modifier)* {
-      return [head,...tail]
+      return V('Mods',{mods:[head,...tail]})
     }
 
   Modifier  
-  = MOD:"align" ARG:mod_arg_axes {
-      return N( 'ModifierNativeLiteral', { MOD, ARG } )
+    = "align" arg:mod_arg_axes {
+        return V( 'ModAlign', {}, { arg } )
+      }
+    / "anchored" arg:mod_arg_anchor {
+        return V( 'ModAnchored', {}, { arg } )
+      }
+    / "as" __ arg:ValueSelector { 
+        return V( 'ModAs', { arg } )
+      }
+    / "at" __ arg:ValueSelector { 
+        return V( 'ModAt', { arg } )
+      }
+    / "facing" arg:mod_arg_selector_anchor { 
+        return V( 'ModFacing', { arg } )
+      }
+    / "for" __ arg:ValueSelector { 
+        return V( 'ModFor', { arg } )
+      }
+    / "in" __ arg:ValueResLocMc {
+      return V( 'ModifierIn', { arg } )
     }
-  / MOD:"anchored" ARG:mod_arg_anchor {
-      return N( 'ModifierNativeLiteral', { MOD, ARG } )
+    / "pos""itioned"? __ "as" __ arg:ValueSelector { 
+        return V( 'ModPositionedAs', { arg } )
+      }
+    / "pos""itioned"? __ arg:Position { 
+        return V( 'ModPositioned', { arg } )
+      }
+    / "rot""ated"? __ "as" __ arg:ValueSelector { 
+        return V( 'ModRotatedAs', { arg } )
+      }
+    / "rot""ated"? __ arg:Position { 
+        return V( 'ModRotated', { arg } )
+      }
+    / arg:RelativeAngles {
+      return V('ModRotated', { arg } )
     }
-  / "facing" args:mod_arg_selector_anchor { 
-      return N( 'ModifierFacing', { ...args} )
+    / arg:RelativeCoords {
+      return V('ModPositioned', { arg } )
     }
-  / MOD:
-    ( "as"
-    / "at"
-    / "pos" "itioned"? __ "as" { return "positioned as" }
-    / "rot" "ated"? __ "as" { return "rotated as" }
-    ) arg:mod_arg_selector {
-    return N( 'ModifierNative', { MOD, arg } )
-  }
-  
-  / "for" arg:mod_arg_selector {
-      return N( 'ModifierFor', { arg } )
-  }
-  / MOD:"in" arg:mod_arg_resloc {
-    return N( 'ModifierNative', { MOD, arg } )
-  }
-  / "pos" "itioned"? _ arg:Position {
-    return N( 'ModifierNative', { MOD:'positioned', arg } )
-  }
-  / "rot" "ated"? _ arg:Rotation {
-    return N( 'ModifierNative', { MOD:'rotated', arg } )
-  }
-  / arg:RelativeAngles {
-    return N('ModifierNative', { MOD:'rotated', arg} )
-  }
-  / arg:RelativeCoords {
-    return N('ModifierNative', { MOD:'positioned', arg } )
-  }
-  / arg:LocalCoords {
-    return N('ModifierNative', { MOD:'positioned', arg } )
-  }
+    / arg:LocalCoords {
+      return V('ModPositioned', { arg } )
+    }
 //\\ construct  
   Construct 
-    = arg:Conditionals then:Instructable 
-        otherwise:(__ "else" @Instructable)? {
-        return N('StructureIfElse', { arg, then, otherwise } )
+    = arg:Conditionals then:StatementOrBlock 
+        otherwise:(__ "else" @StatementOrBlock)? {
+        return V('IfElse', { arg, then, otherwise } )
       }
     / "repeat" mods:(__ @mods:Modifiers)? 
-      statements:Braces? 
+      statements:StatementOrBlock? 
       __ conds:LoopConditionals 
-      then:(__ "then" @Instructable)? {
-        if (mods) return N('StructureRepeatMods',{mods,statements,conds,then})
-        return N('StructureRepeat',{statements,conds,then})
+      then:(__ "then" @StatementOrBlock)? {
+        if (mods) return V('RepeatWithMods',{mods,statements,conds,then})
+        return V('Repeat',{statements,conds,then})
       }
-
-    / "every" __ time:float unit:[tds]? 
-      statements:Instructions 
-      conds:(__ @LoopConditionals)?
-      then:(__ "then" @Instructable)?{
-        return N('every_until',{statements,conds,time,unit,then})
+    / "after" __ time:float unit:[tds] 
+      statements:StatementOrBlock 
+      then:(__ "then" @StatementOrBlock)? {
+        return V('After', { time, statements, then }, {unit} )
+      }
+    /  "every" __ time:float unit:[tds] 
+        statements:StatementOrBlock 
+        conds:(__ @LoopConditionals)?
+        then:(__ "then" @StatementOrBlock)? {
+          return V('Every',{statements,conds,time,then}, {unit} )
       } 
-    / "every" __ time:float unit:[tds]? 
+    / "every" __ time:float unit:[tds] 
       conds:(__ @LoopConditionals)
-      then:(__ "then" @Instructable) {
-        return N('every_until',{conds,time,unit,then})
+      then:(__ "then" @StatementOrBlock) {
+        return V('Every',{conds,time,then},{unit})
       }
-    / head:Promise tail:(__ "and" __ @Promise)* 
-      clauses: ThenCatchClause {
-        return N('PromiseCall',{promises:[head,...tail],...clauses})
-      } 
+      
+  
 
+  WrappedConstruct 
+    = command:(
+        head:Promise tail:(__ "and" __ @Promise)* 
+        clauses: ThenCatchClause {
+          return N('PromiseCall',{promises:[head,...tail],...clauses})
+        } 
+    ) {
+      return I('NativeCommand',{command})
+    }
 //\\ conditionals
 
   Conditionals
@@ -1876,15 +1906,15 @@ Directive
     return {then,_catch}
   }
 
-  ThenClause = __ "then" __ @Instructable
-  CatchClause = __ "catch" __ @Instructable
+  ThenClause = __ "then" __ @StatementOrBlock
+  CatchClause = __ "catch" __ @StatementOrBlock
   
 
   BlockArg
-    = "resolve" _ "(" _ ")" {
+    = "reject" _ "(" _ ")" {
         return I('Reject')
       }
-    / "reject" _ "(" _ ")"  {
+    / "resolve" _ "(" _ ")"  {
         return I('Resolve')
       }
 
@@ -1892,8 +1922,8 @@ Directive
     return I('CallSelf', {} )
   }
 
-//\\ function
 
+ 
   FunctionCall
     =  resloc:FunctionCallResloc {
       return N('FunctionCall', { resloc } )
@@ -1905,13 +1935,3 @@ Directive
     }
 
   FunctionCallResloc = !RESERVED @resloc:resloc_or_tag _ OPEN _ CLOSE 
-  
-  DeclareFunction 
-    = "function" __ resloc:ValueResName tags:(__ @ValueResTag)* (_ OPEN CLOSE _)? statements:Braces {
-        return I('DeclareFunction', { resloc,tags}, {statements } )
-    }
-
-  
-  DeclareName 
-    = NAME_OR_DIE 
-

@@ -4,6 +4,7 @@ module.exports = {
   ...require("./AssignArithmetic"),
   ...require("./DataModify"),
   ...require("./Command"),
-  ...require("./Code"),
+  ...require("./FlowControl"),
   ...require("./Declare"),
+  ...require("./Execute"),
 }

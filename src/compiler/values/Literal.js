@@ -42,9 +42,9 @@ exports.Constant = class Constant extends Literal {
 }
 
 const ResLoc = exports.ResLoc = class ResLoc extends CompilerValue  {
-  constructor({ns,nameParts,...rest}) {
+  constructor({ns,nameParts,defaultNs,...rest}) {
     super(rest)
-    this.ns = ns || this.frame.ns
+    this.ns = ns || defaultNs || this.frame.ns
     this.name = nameParts.join("/")
   };
   [OUTPUT]={

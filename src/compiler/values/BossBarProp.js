@@ -37,15 +37,15 @@ const BossBarProp = exports.BossBarProp = class BossBarProp extends CompilerValu
 
 class BossBarPropAssignable extends BossBarProp {
   [OUTPUT] = {
-    getter: () => `bossbar get ${this.code}`
+    getter: () => `run bossbar get ${this.code}`
   };
 
   [ASSIGN_SUCCESS] = {
-    getter: getter=> `execute store success bossbar ${this.code} run ${getter}`,
+    getter: getter=> `execute store success bossbar ${this.code} ${getter}`,
   }
 
   [ASSIGN] = {
-    getter: getter=> `execute store result bossbar ${this.code} run ${getter}`,
+    getter: getter=> `execute store result bossbar ${this.code} ${getter}`,
     ...this[ASSIGN],
   };
 }

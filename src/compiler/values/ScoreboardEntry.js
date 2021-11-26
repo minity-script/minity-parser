@@ -29,17 +29,17 @@ const ScoreboardEntry = exports.ScoreboardEntry = class ScoreboardEntry extends 
   [OUTPUT] = {
     ...super[OUTPUT],
     scoreboard: () => this.code,
-    getter:() => `score players get ${this.code}`,
+    getter:() => `run scoreboard players get ${this.code}`,
   };
 
   [ASSIGN] = {
-    integer: value => `score players set ${this.code} ${value}`,
-    scoreboard: entry => `score players operation ${this.code} = ${entry}`,
-    getter: command => `execute store result score ${this.code} run ${command}`
+    integer: value => `scoreboard players set ${this.code} ${value}`,
+    scoreboard: entry => `scoreboard players operation ${this.code} = ${entry}`,
+    getter: getter => `execute store result score ${this.code} ${getter}`
   };
 
   [ASSIGN_SUCCESS] = {
-    getter: command => `execute store success score ${this.code} run ${command}`
+    getter: getter => `execute store success score ${this.code} ${getter}`
   };
   
   [ASSIGN_INC] = () => `scoreboard players add ${this.code} 1`;
