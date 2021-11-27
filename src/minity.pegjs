@@ -27,7 +27,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 //\\ globals
   DeclareNamespace 
     = "namespace" __ ns:IDENT EOL statements:Globals {
-        return N('DeclareNamespace',{ns,statements})
+        return V('DeclareNamespace',{},{ns,statements})
       }
 
   DeclareFunction 
@@ -168,24 +168,10 @@ Declaration 'declaration'
         return I('DeclareScore',{},{name,criterion})
       }
 
-Mod 
-  = mod:ModName __ arg:ValueNode 
-
-ModName 
-  = "as" { return "ModAs" }
-  / "at" { return "ModAt" }
-  / "in" { return "ModIn" }
-  / "for" { return "ModFor" }
-  / "align" { return "ModAlign" }
-  / "anchored" { return "ModAnchored" }
-  / "facing" { return "ModFacing" }
-  / "rot""ated"? __ "as" { return "ModRotatedAs" }
-  / "pos""itioned"? __ "as" { return "ModPositionedAs" }
-  / "rot""ated"? { return "ModRotated" }
-  / "pos""itioned"? { return "ModPositioned" }
 
 ValueNode 
-  = ValueConstant
+  = OPEN @ValueNode CLOSE
+  / ValueConstant
   / ValueVariable
   / ValueBossBarProp
   / ValueScore
@@ -313,35 +299,7 @@ Assignment 'assignment'
 
     lhand_scoreboard
       = var_id / score_id
-
-    lhand_bossbar 
-    = "bossbar" __ id:resloc __ prop:("max"/"value"/"visible") {
-        return N('assignment_bossbar_prop',{id,prop})
-      }
-    
- 
-  AssignmentSuccess
-    = lhand:lhand_success _ "?=" _ rhand:rhand_success {
-      return N('AssignmentSuccess',{...lhand,...rhand})
-    }
-
-    lhand_success 
-      = left:lhand_bossbar {
-          return {target:"bossbar",left}
-        }
-      / left: lhand_scoreboard {
-          return {target:"scoreboard",left}
-        }
-      / left: datapath {
-          return {target:"datapath",left}
-      }
-
-    rhand_success 
-      = right:Instruction { return { type:'statement',right } }
-      / "test" __ right:Conditionals { return { type:'test', right } }
-
- 
-    
+  
     
   AssignConstant 
     = name:arg_name EQUALS value:arg_value {
@@ -349,6 +307,44 @@ Assignment 'assignment'
     }
 
 
+
+NativeCommand 
+  = "/" command:command_parts {
+      return I('NativeCommand', { command  } )
+    }
+
+  command_parts
+    = parts:command_part* {
+        return N('template_parts',{parts})
+      }
+
+  command_part
+    = template_expand
+    / command_chars
+
+  command_chars  
+    = chars:(@command_char)+ {
+        return N('template_chars', { chars:chars.join('') } )
+      }
+
+  command_char 
+    = no_expand_char_inline
+    / &"{" !template_expand @"{"
+
+  cmd_arg_count_item 
+    = __
+      count: unsigned_int
+      __
+      item: item_spec {
+        return {count,item}
+      }
+    / __
+      item: item_spec 
+      count: ( __ @unsigned_int)? {
+        return {count,item}
+      }
+      
+//\\ minity commands
 
 MinityCommand
   = "say" 
@@ -389,44 +385,6 @@ MinityCommand
     __ left:ValueNode {
       return I('Remove',{left})
     }    
-
-NativeCommand 
-  = "/" command:command_parts {
-      return I('NativeCommand', { command  } )
-    }
-
-  command_parts
-    = parts:command_part* {
-        return N('template_parts',{parts})
-      }
-
-  command_part
-    = template_expand
-    / command_chars
-
-  command_chars  
-    = chars:(@command_char)+ {
-        return N('template_chars', { chars:chars.join('') } )
-      }
-
-  command_char 
-    = no_expand_char_inline
-    / &"{" !template_expand @"{"
-
-  cmd_arg_count_item 
-    = __
-      count: unsigned_int
-      __
-      item: item_spec {
-        return {count,item}
-      }
-    / __
-      item: item_spec 
-      count: ( __ @unsigned_int)? {
-        return {count,item}
-      }
-      
-//\\ minity commands
 
 WrappedCommand
   = command:cmd {
@@ -496,16 +454,12 @@ WrappedCommand
     / __ @ANCHOR
   
 
-  mod_arg_selector 
-    = OPEN @selector CLOSE
-    / __ @selector
-  
   mod_arg_selector_anchor
     = OPEN selector:selector anchor:(__ @ANCHOR)? CLOSE {
-        return { selector, anchor }
+        return [ selector, anchor ]
       }
     / __ selector:selector anchor:(__ @ANCHOR)? {
-        return { selector, anchor }
+        return [ selector, anchor ]
       }
 
   mod_arg_test 
@@ -515,10 +469,6 @@ WrappedCommand
   mod_arg_test_inverse 
     = OPEN @test_inverse CLOSE
     / __ @test_inverse
-  
-  mod_arg_resloc 
-    = OPEN @resloc CLOSE
-    / __ @resloc
   
   dir_number = @float !"deg"
   rot_angle = @float "deg"
@@ -1768,28 +1718,28 @@ Execution
     / "anchored" arg:mod_arg_anchor {
         return V( 'ModAnchored', {}, { arg } )
       }
-    / "as" __ arg:ValueSelector { 
+    / "as" __ arg:ValueNode { 
         return V( 'ModAs', { arg } )
       }
-    / "at" __ arg:ValueSelector { 
+    / "at" __ arg:ValueNode { 
         return V( 'ModAt', { arg } )
       }
     / "facing" arg:mod_arg_selector_anchor { 
-        return V( 'ModFacing', { arg } )
+        return V( 'ModFacing', {arg} )
       }
-    / "for" __ arg:ValueSelector { 
+    / "for" __ arg:ValueNode { 
         return V( 'ModFor', { arg } )
       }
-    / "in" __ arg:ValueResLocMc {
+    / "in" __ arg:ValueNode {
       return V( 'ModifierIn', { arg } )
     }
-    / "pos""itioned"? __ "as" __ arg:ValueSelector { 
+    / "pos""itioned"? __ "as" __ arg:ValueNode { 
         return V( 'ModPositionedAs', { arg } )
       }
     / "pos""itioned"? __ arg:Position { 
         return V( 'ModPositioned', { arg } )
       }
-    / "rot""ated"? __ "as" __ arg:ValueSelector { 
+    / "rot""ated"? __ "as" __ arg:ValueNode { 
         return V( 'ModRotatedAs', { arg } )
       }
     / "rot""ated"? __ arg:Position { 

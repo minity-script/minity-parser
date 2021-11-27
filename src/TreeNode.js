@@ -51,7 +51,7 @@ const ValueNode = exports.ValueNode = class ValueNode extends TreeNode {
       const args = {}
       for (const id in children) {
         const child = children[id];
-        if (Array.isArray(child)) args[id] = child.map(frame.transform)
+        if (Array.isArray(child)) args[id] = child.map(child=>child&&frame.transform(child))
         else args[id] = child && frame.transform(child)
       }
 

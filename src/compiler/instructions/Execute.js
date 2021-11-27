@@ -77,7 +77,7 @@ exports.ModFor = class ModAt extends Mod {
 }
 
 exports.ModFacing = class ModFacing extends Mod {
-  oldStyle = ({selector,anchor}) => `facing ${selector} ${anchor||'eyes'}`
+  oldStyle = ([selector,anchor]) => `facing ${selector} ${anchor||'eyes'}`
 }
 
 exports.ModIn = class ModIn extends Mod {

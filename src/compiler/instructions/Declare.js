@@ -59,7 +59,16 @@ const DeclareConstant = exports.DeclareConstant = class DeclareConstant extends 
   [DECLARE] = () => this.frame.scope.constants.declare(this.name,{value:this.value}); 
 }
 
-
+const DeclareNamespace = exports.DeclareNamespace = class DeclareNamespace extends Declare {
+  constructor ({ns,statements,...rest}) {
+    super(rest);
+    this.ns = ns;
+    this.statements = statements
+  }
+  [DECLARE] = () => {
+    this.frame.declareNamespace(this.ns, this.statements);
+  }
+}
 const DeclareMacro = exports.DeclareMacro = class DeclareMacro extends Declare {
   [DECLARE] = () => {
     this.frame.declareMacro(this.name, this.args, this.statements);
@@ -75,10 +84,7 @@ const DeclareMacro = exports.DeclareMacro = class DeclareMacro extends Declare {
 const DeclareFunction = exports.DeclareFunction = class DeclareFunction extends Declare {
   [DECLARE] = () => {
     const {resloc:{name},statements,tags} = this
-    const fn = this.frame.declareFunction(name, statements);
-    for (const { ns, name } of tags) {
-      fn.addTag(ns, name);
-    }
+    this.frame.declareFunction(name, statements, tags);
   };
   constructor ({resloc,tags,statements,...rest}) {
     super(rest);

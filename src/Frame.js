@@ -55,13 +55,11 @@ const Frame = exports.Frame =
       return ret;
     }
     declareNamespace = (ns, statements) => {
-      const C = new Frame.Namespace(this,{ns,statements})
-      return C.fn;
+      return Frame.Namespace.execute(this,{ns,statements})
     }
     allowFunctionName = name => !this.namespace.functions[name] && !this.namespace.macros[name]
-    declareFunction = (name, statements) => {
-      const C = new Frame.Function(this,{name,statements})
-      return C.fn;
+    declareFunction = (name,statements,tags) => {
+      return Frame.Function.execute(this,{name,statements,tags})
     }
     declareMacro = (name, args, statements) => {
       this.namespace.addMacro(name,{args, statements, parent:this})
@@ -98,7 +96,7 @@ const Frame = exports.Frame =
       })
     }
     addBlock = (lines, ns = this.ns) => {
-      return this.result.addAnonFunction(ns, this.resloc, lines, "_b"  );
+      return this.result.addAnonFunction(ns, this.scope.prefix.replace(/\W+/g,'_')+ "_b", lines );
     }
     
     anonFunction = (lines, ns = this.ns) => {
@@ -212,61 +210,91 @@ Frame.Child = class FrameChild extends Frame {
   get result() {
     return this.root.result;
   }
+  callSelf = () => 'function '
 }
 
 Frame.Generic = class GenericFrame extends Frame.Child {
-  constructor(parent, { ...rest }) {
-    super(parent, { ...rest });
-    Object.assign(this, this.extra(rest))
-    this.resloc = this.fnNamespace+":"+this.fnName;
-
-
-    const res = this.transform(this.statements);
-    //console.log({res})
-    //res.doDeclare();
-    const lines = res.getCode();
-    this.fn = this.result.addFunction(this.fnNamespace, this.resloc, this.fnName, res.getCode());
+  static execute(parent,params) {
+    //console.log(this.name, params.ns)
+    const frame = new this(parent,params);
+    return frame.execute()
   }
 }
 
 Frame.Namespace = class NamespaceFrame extends Frame.Generic {
-  extra ({statements}) {
-    return {
-      scope: this.namespace.scope,
-      fnNamespace: "zzz_minity",
-      fnName: this.ns+"/load_"+this.result.blockCount++,
-      prefix: "--" + this.ns + "-",
-      statements 
-    }
+  callSelf = ()=>assert(false,'cannot call self() in namespace scope')
+  constructor(parent,{ statements, ...rest}) {
+    console.log('child',rest.ns)
+
+    super(parent,rest);
+
+    this.scope = this.namespace.scope
+    this.fn = this.namespace.addLoadFunction()
+    this.statements = statements;
+  }
+
+  execute() {
+    this.fn.content = this.transform(this.statements).getCode()
+    return []
   }
 }
 
 Frame.Function = class FunctionFrame extends Frame.Generic {
-  extra ({name,statements}) {
-    const prefix = "--" + this.ns + "-" + name + "-"
-    const {namespace} = this
-    return {
-      scope: new Scope(this.parent.scope,{prefix,namespace}),
-      fnNamespace: this.ns,
-      fnName: name,
-      prefix,
-      statements 
+
+  constructor(parent,{name, statements, tags, ...rest}) {
+    super(parent,rest);
+
+    this.scope = new Scope(this.parent.scope,{
+      prefix: `--${this.ns}-${name}-`,
+      namespace: this.namespace
+    });
+    this.fn = this.namespace.addFunction(name);
+    this.statements = statements;
+    this.tags = tags;
+  }
+
+  callSelf = () => {
+    return `function ${this.fn.resloc}`;
+  }
+  
+  execute() {
+    this.fn.content = this.transform(this.statements).getCode();
+    for (const { ns, name } of this.tags) {
+      this.fn.addTag(ns, name);
     }
+    return []
   }
 }
 
 Frame.Macro = class MacroFrame extends Frame.Generic {
-  extra ({name,statements,args,reject,resolve}) {
-    const prefix = "--" + this.ns + "-" + name + "-"
-    const {namespace} = this
-    return {
-      scope: new Scope(this.parent.scope,{prefix,namespace,args}),
-      fnNamespace: "zzz_minity",
-      fnName: this.ns+"/"+name+"_"+this.result.blockCount++,
-      reject,
-      resolve,
-      prefix,
-      statements: statements
+  constructor(parent,{macro,args,resolve,reject,...rest}) {
+    super(parent,rest);
+    this.macro = macro;
+    this.resolve = resolve;
+    this.reject = reject;
+
+    this.scope = new Scope(this.parent.scope,{
+      prefix: `--${this.ns}-${this.macro.name}-`,
+      namespace: this.namespace,
+      args
+    });
+  }
+
+  callSelf = () => {
+    if (!this.fn) {
+      this.fn = this.namespace.addAnonFunction(this.macro.name);  
+    }
+    return `function ${this.fn.resloc}`;
+  }
+  
+  execute() {
+    const code = this.transform(this.macro.statements).getCode();
+    
+    if (this.fn) {
+      this.fn.content = code;
+      return `function ${this.fn.resloc}`;
+    } else {
+      return code
     }
   }
 }

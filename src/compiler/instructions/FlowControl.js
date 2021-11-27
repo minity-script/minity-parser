@@ -1,5 +1,5 @@
 const assert = require("assert");
-
+const print=console['log'];
 const {
   CODE,
   DECLARE
@@ -37,7 +37,7 @@ const Resolve = exports.Resolve = class Resolve extends CompilerInstruction {
 }
 
 const CallSelf = exports.CallSelf = class CallSelf extends CompilerInstruction {
-  [CODE] = () => "function " + this.frame.resloc;
+  [CODE] = () => this.frame.callSelf();
 }
 
 const CallFunctionTag = exports.CallFunctionTag = class CallFunctionTag extends CompilerInstruction {
@@ -59,7 +59,7 @@ const MacroCall = exports.MacroCall = class MacroCall extends CompilerInstructio
     const {ns,name} = resloc;
     const {macroExists,functionExists,expandMacro} = frame;
     if (macroExists(ns, name)) {
-      return "function " + expandMacro(ns, name, args).resloc
+      return expandMacro(ns, name, args)
     }
     if (!args ) {
       if (!functionExists(ns, name)) print('Warning: Calling undeclared (external?) function ' + ns + ":" + name);
@@ -99,11 +99,13 @@ const Repeat = exports.Repeat = class Repeat extends CompilerInstruction {
     const code = statements ? statements.getCode() : [];
     if (!then) {
       return frame.anonFunction(resloc => [
+        '#REPEAT',
         ...code,
         `execute ${conds} run function ${resloc}`
       ])
     } else {
       return frame.anonFunction(resloc => [
+        '#REPEAT_THEN',
         ...code,
         ...frame.ifElse(conds, `function ${resloc}`, then.output('instruction'))
       ])

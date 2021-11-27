@@ -110,24 +110,34 @@ class ResultNamespace {
     assert(!this.macros[name], "duplicate macro " + name)
     this.macros[name]=new ResultMacro(this,{ name, ...props });
   }
-  addFunction(self, name, content) {
-    const fn = new ResultFunction(this, { self, name, content })
+  addFunction(name, content) {
+    const fn = new ResultFunction(this, { name, content })
     assert(!this.functions[fn.name], "duplicate function " + fn.resloc)
     assert(!this.macros[fn.name], "duplicate function " + fn.resloc)
+    console.log('add',fn.resloc)
     return this.functions[fn.name] = fn;
   }
-  addAnonFunction(self, content,prefix="") {
-    if (typeof content !== 'function' ) {
+  nextAnonName(prefix) {
+    const name =prefix+"_"+this.result.blockCount++;
+    return name;
+  }
+  addAnonFunction(prefix,content) {
+    if (content && typeof content !== 'function' ) {
       const cacheKey = JSON.stringify(content)
       if(!this.cache[cacheKey]) {
-        const id = prefix+"_"+this.result.blockCount++;
-        this.cache[cacheKey] = this.main.addFunction(self,[this.ns,id],content);
+        const id = this.nextAnonName(prefix)
+        this.cache[cacheKey] = this.main.addFunction([this.ns,id],content);
       }
       return this.cache[cacheKey]
     } else {
-      const id = prefix+"_"+this.result.blockCount++;
-      return this.main.addFunction(self,[this.ns,id],content);
-    }
+      const id = this.nextAnonName(prefix)
+      return this.main.addFunction([this.ns,id],content);
+    }  
+  }
+  addLoadFunction(content) {
+    const fn = this.addAnonFunction('load',content);
+    fn.addTag('minecraft','load')
+    return fn;
     
   }
   addJson(name, obj) {
@@ -139,7 +149,10 @@ class ResultNamespace {
   get files() {
     return [
       ...Object.values(this.jsons),
-      ...Object.values(this.functions)
+      ...Object.values(this.functions).filter(file=>{
+        console.log('found',file.dest,file.included);
+        return file.included
+      })
     ]
   }
   cache = {}
@@ -152,10 +165,10 @@ ResultNamespace.Custom = class ResultNamespaceCustom extends ResultNamespace {
     super(result,rest);
     this.varObjective = `--${this.ns}--vars`
     this.addObjective(this.varObjective, "dummy");
-    this.addAnonFunction("",()=>[
+    this.addAnonFunction("objectives",()=>[
       `data modify storage zzz_minity:${this.ns} stack set value []`,
       ... Object.values(this.objectives).map(it=>it.declare)
-    ],"objectives").addTag("minecraft","load");
+    ]).addTag("minecraft","load");
     this.scope = new Scope(this.result.scope,{namespace:this,prefix:`--${this.ns}-`})
   }
 }
@@ -163,10 +176,10 @@ ResultNamespace.Custom = class ResultNamespaceCustom extends ResultNamespace {
 ResultNamespace.Main = class ResultNamespaceCustom extends ResultNamespace.Custom {
   constructor(result,{...rest}) {
     super(result,{...rest});
-    this.addAnonFunction("",()=>[
+    this.addAnonFunction("constants",()=>[
       'scoreboard objectives add --minity--const dummy',
       ... Object.values(this.result.constants).map(it=>it.declare)
-    ],"constants").addTag("minecraft","load");
+    ]).addTag("minecraft","load");
   }
   get main() {
     return this;
@@ -175,20 +188,21 @@ ResultNamespace.Main = class ResultNamespaceCustom extends ResultNamespace.Custo
 
 
 class ResultFile {
+
   constructor(namespace, { name, ext, content }) {
     this.namespace = namespace;
     this.ns = namespace.ns
     this.parts = [].concat(name);
     this.ext = ext;
-    if (typeof content=='function') {
-      content = content(this.resloc)
-    }
-    this._content = content;
+    this.content = content;
   }
 
   get content() {
-    if (typeof this._content==='function') return this._content();
-    else return this._content;
+    return this._content;
+  }
+
+  set content(value) {
+    this._content = value;
   }
 
   get text() {
@@ -217,14 +231,24 @@ class ResultFile {
 }
 
 class ResultFunction extends ResultFile {
-  constructor(namespace, { self, ...rest }) {
+  constructor(namespace, { ...rest }) {
     super(namespace, { ext: ".mcfunction", ...rest });
-    this.self = self;
     //console.log("=".repeat(60),"\n"+this.resloc,"\n"+this.text,"\n"+"-".repeat(60))
   }
-    
+  set content(value) {
+    if (typeof value ==='function') value = value(this.resloc);
+    if (value === undefined || value === false) {
+      return;
+    }
+    this._content = value;
+    this.included = true;
+  }
+  get content() {
+    return this._content
+  }
+  
   get text() {
-    //console.log(this.content)
+    console.log(this.resloc, this.content ? "OK" : typeof this.content )
     return this.content.join("\n");
   }
 
@@ -294,8 +318,13 @@ class ResultMacro {
     })
     if (!cache[cache_id]) {
       const { Frame } = require('./Frame')
-      const C = new Frame.Macro(parent,{name,args,statements,resolve,reject})
-      cache[cache_id] =C.fn
+      cache[cache_id] = Frame.Macro.execute(parent,{
+        macro: this,
+        reject,
+        resolve,
+        args,
+        statements
+      });
     } else {
     }
     return cache[cache_id]
