@@ -22,7 +22,7 @@ exports.Merge = class Merge extends BinaryInstruction {
 
 exports.Insert = class Insert extends BinaryInstruction {
   leftProp = INSERT
-  binaryOp = (LEFT,RIGHT) => LEFT(this.index.output('integer'),RIGHT())
+  binaryOp = (LEFT,RIGHT) => LEFT(this.index.output('int'),RIGHT())
 
   constructor({index,...rest}) {
     super(rest)

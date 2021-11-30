@@ -1,4 +1,5 @@
 const assert = require("assert");
+const { CompilerNode } = require("../CompilerNode");
 
 const {
   ASSIGN,
@@ -24,48 +25,49 @@ const DataPath = class DataPath extends CompilerValue {
 
   [OUTPUT] = {
     ...this[OUTPUT],
-    datapath: () => this.code,
-    getter: () => `run data get ${this.code} 1`,
+    'datapath': () => this.code,
+    'getter': () => `run data get ${this.code} 1`,
+    'test_true': () => `data ${this.code}`
   };
 
   [OUTPUT_SCALED] = {
-    getter: (scale) => `run data get ${this.code} ${scale}`,
+    'getter': (scale) => `run data get ${this.code} ${scale}`,
   };
 
   [APPEND] = {
-    nbt: value => `data modify ${this.code} append value ${value}`,
-    datapath: source => `data modify ${this.code} append from ${source}`,
+    'nbt': value => `data modify ${this.code} append value ${value}`,
+    'datapath': source => `data modify ${this.code} append from ${source}`,
   };
 
   [PREPEND] = {
-    nbt: value => `data modify ${this.code} prepend value ${value}`,
-    datapath: source => `data modify ${this.code} prepend from ${source}`,
+    'nbt': value => `data modify ${this.code} prepend value ${value}`,
+    'datapath': source => `data modify ${this.code} prepend from ${source}`,
   };
 
   [MERGE] = {
-    nbt: value => `data modify ${this.code} merge value ${value}`,
-    datapath: source => `data modify ${this.code} merge from ${source}`,
+    'nbt': value => `data modify ${this.code} merge value ${value}`,
+    'datapath': source => `data modify ${this.code} merge from ${source}`,
   };
 
   [INSERT] = {
-    nbt: (index,value) => `data modify ${this.code} insert ${index} value ${value}`,
-    datapath: (index,source) => `data modify ${this.code} insert ${index} from ${source}`,
+    'nbt': (index,value) => `data modify ${this.code} insert ${index} value ${value}`,
+    'datapath': (index,source) => `data modify ${this.code} insert ${index} from ${source}`,
   };
 
   [REMOVE] = () => `data remove ${this.code} `;
 
   [ASSIGN] = {
-    nbt: value => `data modify ${this.code} set value ${value}`,
-    datapath: source => `data modify ${this.code} set from ${source}`,
-    getter: getter => `execute store result ${this.code} int 1 ${getter}`,
+    'nbt': value => `data modify ${this.code} set value ${value}`,
+    'datapath': source => `data modify ${this.code} set from ${source}`,
+    'getter': getter => `execute store result ${this.code} int 1 ${getter}`,
   };
   
   [ASSIGN_SUCCESS] = {
-    getter: getter => `execute store success ${this.code} ${getter}`
+    'getter': getter => `execute store success ${this.code} ${getter}`
   };
 
   [ASSIGN_SCALED] = {
-    getter: (getter,scale,type) => `execute store result ${this.code} ${type} ${scale} ${getter}`,
+    'getter': (getter,scale,type) => `execute store result ${this.code} ${type} ${scale} ${getter}`,
   };
 
 }
@@ -91,5 +93,14 @@ exports.DataPathBlock = class DataPathBlock extends DataPath {
     super(rest)
     this.position = position
     this.code = `block ${this.position} ${this.path}`
+  }
+}
+
+exports.DataPathGeneric = class DataPathGeneric extends DataPath {
+  constructor({ left,right, ...rest }) {
+    super(rest)
+    this.left = left
+    this.path = right
+    this.code = `${this.left.output('data_source')} ${this.path}`
   }
 }

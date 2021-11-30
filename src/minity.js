@@ -60,6 +60,7 @@ const minity = {
       return minity.compile(text,{file,...rest});
     } catch (e) {
       e.file ??= file;
+      if (e.location) e.location.file ??= file;
       throw(e);
     }
   }

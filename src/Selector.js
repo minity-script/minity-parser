@@ -1,3 +1,5 @@
+const { MinityError } = require("./utils");
+
 exports.Selector = class SelectorSpec {
   includes = {}
   excludes = {}

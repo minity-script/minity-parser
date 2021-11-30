@@ -2,10 +2,12 @@ const assert = require("assert");
 const print=console['log'];
 const {
   CODE,
-  DECLARE
+  DECLARE,
+  OUTPUT
 } = require("../symbols");
 
 const { CompilerInstruction } = require("./CompilerInstruction")
+const { CompilerNode } = require("../CompilerNode")
 
 const Statements = exports.Statements = class Statements extends CompilerInstruction {
   constructor({ statements, ...rest }) {
@@ -15,7 +17,6 @@ const Statements = exports.Statements = class Statements extends CompilerInstruc
   [DECLARE] = () => {
     for (const it of this.statements) {
       if (typeof it === 'string') {
-        console.log('STRING',{it})
         throw new Error
       } else {
         //it.doDeclare()
@@ -23,7 +24,6 @@ const Statements = exports.Statements = class Statements extends CompilerInstruc
     }
   };
   [CODE] = () => {
-    //console.log(this.statements)
     return this.statements.flatMap(it => typeof it === 'string' ? it : it[CODE]()).filter(Boolean);
   }
 }
@@ -70,44 +70,60 @@ const MacroCall = exports.MacroCall = class MacroCall extends CompilerInstructio
 }
 
 
+const ifElseCode = (ns, checks, thenCode, elseCode) => {
+  if (!elseCode) {
+    return [
+      `execute ${checks} run ${thenCode}`
+    ]
+  }
+  const stack = `storage zzz_minity:${ns} stack`;
+  const top = `${stack}[-1]`;
+
+  return [
+    `data modify ${stack} append value [B;]`,
+    `execute ${checks} run data modify ${top} append value 1b`,
+    `execute if data ${top}[0] run ${thenCode}`,
+    `execute unless data ${top}[0] run ${elseCode}`,
+    `data remove ${top}`
+  ]
+}
+
 const IfElse = exports.IfElse = class IfElse extends CompilerInstruction {
-  constructor({ arg, then, otherwise, ...rest }) {
+  constructor({ test, then, otherwise, ...rest }) {
     super(rest)
-    this.arg = arg;
+    this.test = test;
     this.then = then;
     this.otherwise = otherwise
 
   }
   [CODE] = () => {
-    const { arg, then, otherwise } = this;
+    const { test, then, otherwise, frame } = this;
     return otherwise
-      ? this.frame.ifElse(arg, then.output('instruction'), otherwise.output('instruction'))
-      : `execute ${arg} run ${then.output('instruction')}`
+      ? ifElseCode(frame.ns, test.output('test'), then.output('instruction'), otherwise.output('instruction'))
+      : `execute ${test.output('test')} run ${then.output('instruction')}`
   }
 }
 
 const Repeat = exports.Repeat = class Repeat extends CompilerInstruction {
-  constructor({ statements, conds, then, ...rest }) {
+  constructor({ statements, test, then, ...rest }) {
     super(rest)
-    this.conds = conds;
+    this.test = test;
     this.then = then;
     this.statements = statements
 
   }
   [CODE] = () => {
-    const { conds, then, statements, frame } = this;
+    const { test, then, statements, frame } = this;
     const code = statements ? statements.getCode() : [];
     if (!then) {
       return frame.anonFunction(resloc => [
-        '#REPEAT',
         ...code,
-        `execute ${conds} run function ${resloc}`
+        `execute ${test.output('test')} run function ${resloc}`
       ])
     } else {
       return frame.anonFunction(resloc => [
-        '#REPEAT_THEN',
         ...code,
-        ...frame.ifElse(conds, `function ${resloc}`, then.output('instruction'))
+        ...ifElseCode(frame.ns, test.output('test'), `function ${resloc}`, then.output('instruction'))
       ])
     }
   }
@@ -119,21 +135,21 @@ const RepeatWithMods = exports.RepeatWithMods = class RepeatWithMods extends Rep
     this.mods = mods;
   }
   [CODE] = () => {
-    const { mods, conds, then, statements, frame } = this;
+    const { mods, test, then, statements, frame } = this;
     const code = statements ? statements.getCode() : [];
     let MODS = mods.output('mods');
     if (!then) {
       return [
         `execute ${MODS} run ` + frame.anonFunction(resloc=>[
           ...code,
-          `execute ${conds} ${MODS} run function ${resloc}`
+          `execute ${test.output('test')} ${MODS} run function ${resloc}`
         ])
       ]
     } else {
       return [
         `execute ${MODS} run ` + frame.anonFunction(resloc=>[
           ...code,
-          ...frame.ifElse(conds, `execute ${MODS} run function ${resloc}`, then.output('instruction'))
+          ...ifElseCode(frame.ns, test.output('test'), `execute ${MODS} run function ${resloc}`, then.output('instruction'))
         ])
       ]
     }
@@ -161,18 +177,18 @@ const After = exports.After = class After extends CompilerInstruction {
 }
 
 const Every = exports.Every = class Every extends CompilerInstruction {
-  constructor({ conds, then, statements, time, unit, ...rest }) {
+  constructor({ test, then, statements, time, unit, ...rest }) {
     super(rest)
     this.time = time
     this.unit = unit
     this.then = then
     this.statements = statements
-    this.conds = conds
+    this.test = test
   }
   [CODE] = () => {
-    const { time, unit, then, conds, statements, frame } = this;
+    const { time, unit, then, test, statements, frame } = this;
     const code = statements ? statements.getCode() : [];
-    if (!conds) {
+    if (!test) {
       const fn = frame.anonFunction(resloc => [
         ...code,
         `schedule function ${resloc} ${time}${unit}`
@@ -182,14 +198,58 @@ const Every = exports.Every = class Every extends CompilerInstruction {
     if (!then) {
       const fn = frame.anonFunction(resloc => [
         ...code,
-        `execute ${conds} run schedule function ${resloc}`
+        `execute ${test.output('test')} run schedule function ${resloc}`
       ])
       return `schedule ${fn} ${time}${unit}`
     }
     const fn = frame.anonFunction(resloc => [
       ...code,
-      ...frame.ifElse(conds, `schedule function ${resloc} ${time}${unit}`, then.output('instruction'))
+      ...ifElseCode(frame.ns, test.output('test'), `schedule function ${resloc} ${time}${unit}`, then.output('instruction'))
     ])
     return `schedule ${fn} ${time}${unit}`
   }
+}
+
+
+exports.TestTrue = class TestTrue extends CompilerNode {
+  constructor({ arg, ...rest }) {
+    super(rest)
+    this.arg = arg;
+  };
+
+  [OUTPUT] = {
+    'test': () => {
+      const { arg } = this;
+      if (arg.canOutput('test_true')) return `ìf ${arg.output('test_true')}`
+      if (arg.canOutput('test_false')) return `unless ${arg.output('test_false')}`
+      this.fail('bad arg ' + arg.describe + " value " +arg.value)
+    }
+  };
+}
+
+exports.TestFalse = class TestFalse extends CompilerNode {
+  constructor({ arg, ...rest }) {
+    super(rest)
+    this.arg = arg;
+  };
+
+  [OUTPUT] = {
+    'test': () => {
+      const { arg } = this;
+      if (arg.canOutput('test_true')) return `unless ${arg.output('test_true')}`
+      if (arg.canOutput('test_false')) return `if ${arg.output('test_false')}`
+      this.fail('bad arg ' + arg.describe )
+    }
+  };
+}
+
+exports.Tests = class Tests extends CompilerNode {
+  constructor({ tests, ...rest }) {
+    super(rest)
+    this.tests = tests;
+  };
+
+  [OUTPUT] = {
+    'test': () => this.tests.map(it => it.output('test')).join(" ")
+  };
 }

@@ -39,9 +39,9 @@ const Mod = exports.Mod = class Mod extends CompilerNode {
   [OUTPUT] = {
     'mod': () => {
       if (this.oldStyle) return this.oldStyle(this.arg);
-      for (const id in this[MOD_ARG]) {
-        if (this.arg.canOutput(id)) {
-          return this[MOD_ARG][id](this.arg.output(id))
+      for (const type in this[MOD_ARG]) {
+        if (this.arg.canOutput(type)) {
+          return this[MOD_ARG][type](this.arg.output(type))
         }
       }
       this.fail('bad arg')

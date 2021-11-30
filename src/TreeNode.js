@@ -1,13 +1,8 @@
 
-class MinityError extends Error {
-  constructor(message, location) {
-    super(message);
-    this.location = location;
-  }
-}
 
 const { transformers } = require("./nodeTransformers");
 const { Compiler } = require("./compiler");
+const { MinityError } = require("./utils");
 
 const TreeNode = exports.TreeNode = class TreeNode {
   constructor($, location) {
@@ -37,7 +32,9 @@ const GenericNode = exports.GenericNode = class GenericNode extends TreeNode {
 
 const ValueNode = exports.ValueNode = class ValueNode extends TreeNode {
   constructor($, location, children, values) {
+    if(!location.file) throw new MinityError("WTF",location)
     super($, location)
+
     this.children = children
     this.values = values
     this.ValueClass = Compiler[this.$]
@@ -51,7 +48,12 @@ const ValueNode = exports.ValueNode = class ValueNode extends TreeNode {
       const args = {}
       for (const id in children) {
         const child = children[id];
-        if (Array.isArray(child)) args[id] = child.map(child=>child&&frame.transform(child))
+        if (Array.isArray(child)) {
+          if (id=='nameParts') {
+            //console.log(child)
+          }
+          args[id] = child.map(grandchild=>grandchild&&frame.transform(grandchild))
+        }
         else args[id] = child && frame.transform(child)
       }
 
@@ -62,8 +64,8 @@ const ValueNode = exports.ValueNode = class ValueNode extends TreeNode {
       it.doDeclare && it.doDeclare()
       return it
     } catch (e) {
-      e.location ??= this.location;
-      throw (e)
+      e.location||=this.location;
+      throw(e)
     }
   }
 }

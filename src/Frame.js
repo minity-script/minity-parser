@@ -4,9 +4,7 @@ const { Result } = require("./Result");
 const { Scope } = require("./Scope");
 const { TreeNode } = require("./TreeNode");
 const { Nbt } = require("./Nbt");
-const { resolve, dirname } = require("path");
 const { randomString, resolveModulePath } = require("./utils.js");
-const { existsSync } = require("fs");
 const { isNbt, toNbt, toSnbt, toJson } = Nbt;
 
 const print = console['log']
@@ -29,6 +27,7 @@ const Frame = exports.Frame =
       return this.T(node);
     }
     importFile = (file) => {
+      console.log(this.root.file,file)
       const path = resolveModulePath(this.root.file,file);
       this.result.importFile(path)
     }
@@ -39,10 +38,11 @@ const Frame = exports.Frame =
     transform = (node,...args) => {
       if (isNbt(node)) return toNbt(node);
       if (!node?.transform) {
-        print(node);
+        print(node,node?.location)
         let e = new Error("WTF")
-        print(e.stack);
-        process.exit(-1);
+        throw e;
+        //print(e.stack);
+        //process.exit(-1);
       }
       const ret = node.transform(this,...args);
       if (process.env.DEBUG) {
@@ -67,8 +67,6 @@ const Frame = exports.Frame =
     getMacro = (ns,name) => {
       return this.result.getMacro(ns||this.ns,name);
     }
-    setArg = (name,value)=> this.scope.setArg(name,value)
-    getArg = (name,type="value")=> this.scope.getArg(name,type)
     macroExists = (ns,name) => {
       return this.result.macroExists(ns||this.ns,name);
     }
@@ -82,19 +80,6 @@ const Frame = exports.Frame =
       const new_args = macro.transformArgs(this,args);
       return macro.expand(new_args,resolve,reject)
     }
-    declareEvent = (id, trigger, conditions, then) => {
-      this.result.addJson(this.ns, ["advancements",id], {
-        criteria: {
-          [id]: {
-            trigger,
-            conditions  
-          }
-        },
-        rewards: {
-          function: then
-        }
-      })
-    }
     addBlock = (lines, ns = this.ns) => {
       return this.result.addAnonFunction(ns, this.scope.prefix.replace(/\W+/g,'_')+ "_b", lines );
     }
@@ -107,41 +92,13 @@ const Frame = exports.Frame =
       return this.addBlock(lines,ns).resloc;
     }
 
-    ifElse = (checks, thenCode, elseCode) => {
-      if (!elseCode) {
-        return [
-          `execute ${checks} run ${thenCode}`
-        ]
-      }
-      const stack = `storage zzz_minity:${this.ns} stack`;
-      const top = `${stack}[-1]`;
-
-      return [
-        `data modify ${stack} append value [B;]`,
-        `execute ${checks} run data modify ${top} append value 1b`,
-        `execute if data ${top}[0] run ${thenCode}`,
-        `execute unless data ${top}[0] run ${elseCode}`,
-        `data remove ${top}`
-      ]
-    }
 
     sumCoords = coords => {
       let ret = { x: 0, y: 0, z: 0 };
       for (const { axis, d, f } of coords) ret[axis] += f * this.T(d);
       return ret;
     }
-    /*
-    addJson = (parts, value) => {
-      this.result.addJson(parts, value);
-    }*/
-    addFunctionTag = (ns, tag, fn) => {
-      this.result.addJson(ns, ["tags", "functions", tag], {
-        values: [fn]
-      })
-    }
-    defineJson = (ns, name, value) => {
-      this.result.addJson(ns, [name], value)
-    }
+
     constantId = value => {
       const constant = this.result.addConstant(value);
       return constant.id;
@@ -224,7 +181,7 @@ Frame.Generic = class GenericFrame extends Frame.Child {
 Frame.Namespace = class NamespaceFrame extends Frame.Generic {
   callSelf = ()=>assert(false,'cannot call self() in namespace scope')
   constructor(parent,{ statements, ...rest}) {
-    console.log('child',rest.ns)
+    //console.log('child',rest.ns)
 
     super(parent,rest);
 
@@ -259,8 +216,8 @@ Frame.Function = class FunctionFrame extends Frame.Generic {
   
   execute() {
     this.fn.content = this.transform(this.statements).getCode();
-    for (const { ns, name } of this.tags) {
-      this.fn.addTag(ns, name);
+    for (const { getNs, name } of this.tags) {
+      this.fn.addTag(getNs(), name);
     }
     return []
   }

@@ -1,14 +1,15 @@
 const assert = require("assert");
+const { randomString } = require("../../utils");
 
 const {
   CODE,
   DECLARE
 } = require("../symbols");
 
-const {CompilerInstruction} = require("./CompilerInstruction")
+const { CompilerInstruction } = require("./CompilerInstruction")
 
 const Declare = exports.Declare = class Declare extends CompilerInstruction {
-  [DECLARE] = ()=>{};
+  [DECLARE] = () => { };
   [CODE] = () => {
     return ""
     return `#DECLARE ${this.describe}`
@@ -16,21 +17,21 @@ const Declare = exports.Declare = class Declare extends CompilerInstruction {
 }
 
 const DeclareScoped = exports.DeclareScoped = class DeclareScoped extends Declare {
-  constructor({name,...rest}) {
+  constructor({ name, ...rest }) {
     super(rest)
     this.name = name
   };
-  get describe () {
+  get describe() {
     return `${this.constructor.name} ${this.name}`
-  } 
+  }
 }
 
 const DeclareScore = exports.DeclareScore = class DeclareScore extends DeclareScoped {
-  constructor({criterion,...rest}) {
+  constructor({ criterion, ...rest }) {
     super(rest)
     this.criterion = criterion || 'dummy'
   };
-  [DECLARE] = () => this.frame.scope.scores.declare(this.name,{criterion:this.criterion});
+  [DECLARE] = () => this.frame.scope.scores.declare(this.name, { criterion: this.criterion });
 }
 
 const DeclareTag = exports.DeclareTag = class DeclareTag extends DeclareScoped {
@@ -39,28 +40,28 @@ const DeclareTag = exports.DeclareTag = class DeclareTag extends DeclareScoped {
 
 
 const DeclareVar = exports.DeclareVar = class DeclareVar extends DeclareScoped {
-  constructor ({value,...rest}) {
+  constructor({ value, ...rest }) {
     super(rest);
     this.value = value
   }
-  [DECLARE] = () => this.frame.scope.vars.declare(this.name); 
+  [DECLARE] = () => this.frame.scope.vars.declare(this.name);
   [CODE] = () => {
     if (!this.value) return "";
     const newVar = this.frame.scope.vars.create(this.name)
-    return `scoreboard players set ${newVar.code} ${0|this.value}`
+    return `scoreboard players set ${newVar.code} ${0 | this.value}`
   }
 }
 
 const DeclareConstant = exports.DeclareConstant = class DeclareConstant extends DeclareScoped {
-  constructor ({value,...rest}) {
+  constructor({ value, ...rest }) {
     super(rest);
     this.value = value
   }
-  [DECLARE] = () => this.frame.scope.constants.declare(this.name,{value:this.value}); 
+  [DECLARE] = () => this.frame.scope.constants.declare(this.name, { value: this.value });
 }
 
 const DeclareNamespace = exports.DeclareNamespace = class DeclareNamespace extends Declare {
-  constructor ({ns,statements,...rest}) {
+  constructor({ ns, statements, ...rest }) {
     super(rest);
     this.ns = ns;
     this.statements = statements
@@ -73,7 +74,7 @@ const DeclareMacro = exports.DeclareMacro = class DeclareMacro extends Declare {
   [DECLARE] = () => {
     this.frame.declareMacro(this.name, this.args, this.statements);
   }
-  constructor ({name,args,statements,...rest}) {
+  constructor({ name, args, statements, ...rest }) {
     super(rest);
     this.name = name
     this.args = args
@@ -83,10 +84,10 @@ const DeclareMacro = exports.DeclareMacro = class DeclareMacro extends Declare {
 
 const DeclareFunction = exports.DeclareFunction = class DeclareFunction extends Declare {
   [DECLARE] = () => {
-    const {resloc:{name},statements,tags} = this
+    const { resloc: { name }, statements, tags } = this
     this.frame.declareFunction(name, statements, tags);
   };
-  constructor ({resloc,tags,statements,...rest}) {
+  constructor({ resloc, tags, statements, ...rest }) {
     super(rest);
     this.resloc = resloc
     this.statements = statements
@@ -94,25 +95,50 @@ const DeclareFunction = exports.DeclareFunction = class DeclareFunction extends 
   }
 }
 
-const DefineJson = exports.DefineJson  = class DefineJson extends Declare {
-  constructor ({resloc,value,...rest}) {
+const DefineJson = exports.DefineJson = class DefineJson extends Declare {
+  constructor({ resloc, value, ...rest }) {
     super(rest);
     this.value = value
     this.resloc = resloc
   };
   [DECLARE] = () => {
-    const {resloc:{ns,name},value} = this
-    this.frame.defineJson(ns||this.frame.ns,name,value.value)
+    const { resloc: { ns, name }, value, frame } = this
+    frame.result.addJson(ns || frame.ns, name, value.get('value'))
   }
 }
 
-const Import = exports.Import  = class Import extends Declare {
-  constructor ({file,...rest}) {
+const Import = exports.Import = class Import extends Declare {
+  constructor({ file, ...rest }) {
     super(rest);
-    this.file = file
-    this.frame.importFile(String(this.file))
+    //this.file = file
+    const {frame} = this
+    frame.importFile(String(file))
   };
   [DECLARE] = () => {
     //this.frame.importFile(String(this.file))
+  }
+}
+
+
+const DeclareEvent = exports.DeclareEvent = class DeclareEvent extends Declare {
+  constructor({ trigger, conditions, then, ...rest }) {
+    super(rest);
+    this.trigger = trigger
+    this.conditions = conditions
+    this.then = then
+  }
+  [DECLARE] = () => {
+    const { frame, trigger, conditions, then } = this;
+    const id = randomString();
+    const fn = frame.addBlock([
+      ...then.getCode(),
+      `advancement revoke @s only ${frame.ns}:${id}`
+    ])
+    frame.result.addJson(frame.ns, ["advancements", id], {
+      criteria: {
+        [id]: { trigger, conditions }
+      },
+      rewards: { function: fn.resloc }
+    })
   }
 }

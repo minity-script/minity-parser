@@ -2,6 +2,12 @@ const assert = require("assert");
 
 const {
   OUTPUT,
+  TEST_EQ,
+  TEST_NEQ,
+  TEST_LT,
+  TEST_LTE,
+  TEST_GT,
+  TEST_GTE,
   ASSIGN,
   ASSIGN_SUCCESS,
   ASSIGN_SWAP,
@@ -28,18 +34,19 @@ const ScoreboardEntry = exports.ScoreboardEntry = class ScoreboardEntry extends 
 
   [OUTPUT] = {
     ...super[OUTPUT],
-    scoreboard: () => this.code,
-    getter:() => `run scoreboard players get ${this.code}`,
+    'scoreboard': () => this.code,
+    'getter':() => `run scoreboard players get ${this.code}`,
+    'test_false': () => `score ${this.code} matches 0`
   };
 
   [ASSIGN] = {
-    integer: value => `scoreboard players set ${this.code} ${value}`,
-    scoreboard: entry => `scoreboard players operation ${this.code} = ${entry}`,
-    getter: getter => `execute store result score ${this.code} ${getter}`
+    'int': value => `scoreboard players set ${this.code} ${value}`,
+    'scoreboard': entry => `scoreboard players operation ${this.code} = ${entry}`,
+    'getter': getter => `execute store result score ${this.code} ${getter}`
   };
 
   [ASSIGN_SUCCESS] = {
-    getter: getter => `execute store success score ${this.code} ${getter}`
+    'getter': getter => `execute store success score ${this.code} ${getter}`
   };
   
   [ASSIGN_INC] = () => `scoreboard players add ${this.code} 1`;
@@ -47,40 +54,61 @@ const ScoreboardEntry = exports.ScoreboardEntry = class ScoreboardEntry extends 
   [ASSIGN_DEC] = () => `scoreboard players remove ${this.code} 1`;
 
   [ASSIGN_ADD] = {
-    integer: value => `scoreboard players add ${this.code} ${value}`,
-    scoreboard: entry => `scoreboard players operation ${this.code} += ${entry}`
+    'int': value => `scoreboard players add ${this.code} ${value}`,
+    'scoreboard': entry => `scoreboard players operation ${this.code} += ${entry}`
   };
   
   [ASSIGN_SUB] = {
-    integer: value => `scoreboard players remove ${this.code} ${value}`,
-    scoreboard: entry => `scoreboard players operation ${this.code} -= ${entry}`
+    'int': value => `scoreboard players remove ${this.code} ${value}`,
+    'scoreboard': entry => `scoreboard players operation ${this.code} -= ${entry}`
   };
 
   [ASSIGN_MUL] = {
-    integer: value => `scoreboard players operation ${this.code} *= ${this.frame.scoreboardConstant(value)}`,
-    scoreboard: entry => `scoreboard players operation ${this.code} *= ${entry}`
+    'int': value => `scoreboard players operation ${this.code} *= ${this.frame.scoreboardConstant(value)}`,
+    'scoreboard': entry => `scoreboard players operation ${this.code} *= ${entry}`
   };
 
   [ASSIGN_DIV] = {
-    integer: value => `scoreboard players operation ${this.code} /= ${this.frame.scoreboardConstant(value)}`,
-    scoreboard: entry => `scoreboard players operation ${this.code} /= ${entry}`
+    'int': value => `scoreboard players operation ${this.code} /= ${this.frame.scoreboardConstant(value)}`,
+    'scoreboard': entry => `scoreboard players operation ${this.code} /= ${entry}`
   };
 
   [ASSIGN_MOD] = {
-    integer: value => `scoreboard players operation ${this.code} %= ${this.frame.scoreboardConstant(value)}`,
-    scoreboard: entry => `scoreboard players operation ${this.code} %= ${entry}`
+    'int': value => `scoreboard players operation ${this.code} %= ${this.frame.scoreboardConstant(value)}`,
+    'scoreboard': entry => `scoreboard players operation ${this.code} %= ${entry}`
   };
 
   [ASSIGN_LT] = {
-    integer: value => `scoreboard players operation ${this.code} < ${this.frame.scoreboardConstant(value)}`,
-    scoreboard: entry => `scoreboard players operation ${this.code} < ${entry}`
+    'int': value => `scoreboard players operation ${this.code} < ${this.frame.scoreboardConstant(value)}`,
+    'scoreboard': entry => `scoreboard players operation ${this.code} < ${entry}`
   };
   [ASSIGN_GT] = {
-    integer: value => `scoreboard players operation ${this.code} > ${this.frame.scoreboardConstant(value)}`,
-    scoreboard: entry => `scoreboard players operation ${this.code} > ${entry}`
+    'int': value => `scoreboard players operation ${this.code} > ${this.frame.scoreboardConstant(value)}`,
+    'scoreboard': entry => `scoreboard players operation ${this.code} > ${entry}`
   };
   [ASSIGN_SWAP] = {
-    scoreboard: entry => `scoreboard players operation ${this.code} > ${entry}`
+    'scoreboard': entry => `scoreboard players operation ${this.code} > ${entry}`
+  };
+
+  [TEST_EQ] = {
+    'int': value => `score ${this.code} matches ${value}`,
+    'scoreboard': entry => `score ${this.code} = ${entry}`
+  };
+  [TEST_GT] = {
+    'int': value => `score ${this.code} matches ${+value+1}..`,
+    'scoreboard': entry => `score ${this.code} > ${entry}`
+  };
+  [TEST_GTE] = {
+    'int': value => `score ${this.code} matches ${value}..`,
+    'scoreboard': entry => `score ${this.code} >= ${entry}`
+  };
+  [TEST_LT] = {
+    'int': value => `score ${this.code} matches ..${+value-1}`,
+    'scoreboard': entry => `if score ${this.code} < ${entry}`
+  };
+  [TEST_LTE] = {
+    'int': value => `score ${this.code} matches ..${value}`,
+    'scoreboard': entry => `score ${this.code} <= ${entry}`
   };
 }
 
@@ -93,9 +121,11 @@ exports.Variable = class Variable extends ScoreboardEntry {
 }
 
 exports.Score = class Score extends ScoreboardEntry {
-  constructor({frame,name,...rest}) {
+  constructor({frame,left,right,...rest}) {
+    const name = right.get('string');
     let {objective} = frame.scope.scores.get(name);
-    super({frame,objective,...rest})
+    const target = left.output('selector')
+    super({frame,objective,target,...rest})
     this.name = name
   }
 }

@@ -208,14 +208,6 @@ const transformers = exports.transformers = {
     return node.ident;
   },
 
-
-  test_entity: ({ selector }, { T }) => `entity ${T(selector)}`,
-  test_datapath: ({ path }, { T }) => `data ${T(path)}`,
-  test_scoreboard: ({ left, op, right }, { T }) => `score ${T(left)} ${op} ${T(right)}`,
-  test_scoreboard_true: ({ left }, { T }) => `score ${T(left)} matches 1..`,
-  test_scoreboard_zero: ({ id }, { T }) => `score ${T(id)} matches 0`,
-  test_scoreboard_range: ({ left, right }, { T, Nbt }) => `score ${T(left)} matches ${T(right)}`,
-
   tag_id: ({ name }, { T, scope }) => scope.tags.get(T(name)),
   tag_set: ({ selector, tag }, { T }) => `tag ${T(selector)} add ${T(tag).id}`,
   tag_unset: ({ selector, tag }, { T }) => `tag ${T(selector)} remove ${T(tag).id}`,
@@ -323,11 +315,6 @@ const transformers = exports.transformers = {
   CaretCoord: ({ arg }, { T }) => arg ? `^${T(arg)}` : '^',
   
   
-
-  Conditionals: ({ subs }, { T }) => subs.map(T).join(" "),
-  ConditionalIf: ({ arg }, { T }) => `if ${T(arg)}`,
-  ConditionalUnless: ({ arg }, { T }) => `unless ${T(arg)}`,
-
 
 
   MacroCallSpec: (

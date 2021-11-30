@@ -114,7 +114,6 @@ class ResultNamespace {
     const fn = new ResultFunction(this, { name, content })
     assert(!this.functions[fn.name], "duplicate function " + fn.resloc)
     assert(!this.macros[fn.name], "duplicate function " + fn.resloc)
-    console.log('add',fn.resloc)
     return this.functions[fn.name] = fn;
   }
   nextAnonName(prefix) {
@@ -150,7 +149,6 @@ class ResultNamespace {
     return [
       ...Object.values(this.jsons),
       ...Object.values(this.functions).filter(file=>{
-        console.log('found',file.dest,file.included);
         return file.included
       })
     ]
@@ -248,7 +246,6 @@ class ResultFunction extends ResultFile {
   }
   
   get text() {
-    console.log(this.resloc, this.content ? "OK" : typeof this.content )
     return this.content.join("\n");
   }
 
@@ -290,17 +287,17 @@ class ResultMacro {
     this.ns = namespace.ns
   }
   cache = {}
-  transformArgs({Nbt},args) {
+  transformArgs({T},args) {
     const {named={},numbered=[]}=args||{}
     const new_args = {};
     for (const i in this.args) {
       const { name, def } = this.args[i];
       if (name in named) {
-        new_args[name] = Nbt(named[name])
+        new_args[name] = T(named[name])
       } else if (i in numbered) {
-        new_args[name] = Nbt(numbered[i])
+        new_args[name] = T(numbered[i])
       } else if (def) {
-        new_args[name] = Nbt(def)
+        new_args[name] = T(def)
       } else {
         throw new Error("arg " + name + " in macro " + this.name + " is not optional")
       }
@@ -311,11 +308,15 @@ class ResultMacro {
     const {name,cache,parent,statements} = this;
     resolve ??= null
     reject ??= null
-    const cache_id = JSON.stringify({
-      args,
+    
+    const cache_hash =({
+      args:{},
       resolve,
       reject
     })
+
+    for (const id in args) cache_hash.args[id]=args[id].output('nbt')
+    const cache_id = JSON.stringify(cache_hash)
     if (!cache[cache_id]) {
       const { Frame } = require('./Frame')
       cache[cache_id] = Frame.Macro.execute(parent,{
@@ -325,7 +326,9 @@ class ResultMacro {
         args,
         statements
       });
+      console.log('CACHE MISS',cache_id)
     } else {
+      console.log('CACHE HIT')
     }
     return cache[cache_id]
   }

@@ -1,13 +1,26 @@
 module.exports = {
+
   OUTPUT: Symbol.for("OUTPUT"),
-  
-  OUTPUT_SCALED: Symbol.for("OUTPUT_SCALED"),
-  
+  CONVERT: Symbol.for("CONVERT"),  
   CODE: Symbol.for("CODE"),
   DECLARE: Symbol.for("DECLARE"),
 
+  VALUE: Symbol.for("VALUE"),
+  ITEMS: Symbol.for("ITEMS"),
+  PROPS: Symbol.for("PROPS"),
+
+  TEST_LT: Symbol.for("TEST_LT"),
+  TEST_LTE: Symbol.for("TEST_LTE"),
+  TEST_GT: Symbol.for("TEST_GT"),
+  TEST_GTE: Symbol.for("TEST_GTE"),
+  TEST_EQ: Symbol.for("TEST_EQ"),
+  TEST_NEQ: Symbol.for("TEST_NEQ"),
+
   ASSIGN: Symbol.for("ASSIGN"),
+
   ASSIGN_SCALED: Symbol.for("ASSIGN_SCALED"),
+  OUTPUT_SCALED: Symbol.for("OUTPUT_SCALED"),
+
   ASSIGN_SUCCESS: Symbol.for("ASSIGN_SUCCESS"),
   
   ASSIGN_SWAP: Symbol.for("ASSIGN_SWAP"),
@@ -28,6 +41,7 @@ module.exports = {
   REMOVE: Symbol.for("REMOVE"),
 
   MOD_ARG: Symbol.for("MOD_ARG"),
+
 }
 
 

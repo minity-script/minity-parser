@@ -9,7 +9,6 @@
     return ($,...args) => {
       const loc = location();
       const {file} = options;
-      //console.log({file})
       loc.file = file;
       const node = fn($,loc,...args)
       return node;  
@@ -72,9 +71,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
   global 
     = DeclareFunction
     / DeclareMacro
-    / command: DeclareEvent {
-        return I('NativeCommand',{command})  
-      }
+    / DeclareEvent 
     / Directive
     / Statement
 
@@ -82,7 +79,7 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
     = "on" 
       __ trigger:resloc_mc conditions:(CONCAT @object) 
       __ "then" then:StatementOrBlock {
-        return N('DeclareEvent',{trigger,conditions,then})
+        return V('DeclareEvent',{trigger,conditions,then})
       }
 
 Directive
@@ -90,7 +87,7 @@ Directive
     __ file:string {
       return I('Import',{file})
     } 
-  / "define" __ resloc:ValueResLoc __ value:ValueLiteral {
+  / "define" __ resloc:ValueResLoc __ value:LiteralValue {
     return I('DefineJson',{resloc,value})
   }
 //\\ compile-time constant
@@ -99,7 +96,7 @@ Directive
     = "?" @WORD
 
   arg_value 
-    = typed_value
+    = LiteralValue
 
 
   //\\ macro_args
@@ -168,19 +165,37 @@ Declaration 'declaration'
         return I('DeclareScore',{},{name,criterion})
       }
 
+CompareOp 
+    = ">=" { return 'OpGTE' }
+    / "<=" { return 'OpLTE' }
+    / "==" { return 'OpEQ' }
+    / "!=" { return 'OpNEQ' }
+    / "<" { return 'OpLT' }
+    / ">" { return 'OpGT' }
 
-ValueNode 
+ValueNode
+  = ValueCompare
+
+ValueCompare
+  = left:ValueAccessor _ op:CompareOp _ right:ValueAccessor {
+      return V(op,{left,right})
+    }
+  / ValueAccessor
+
+ValueAccessor
+  = ValueScore 
+  / ValueDataPath
+  / ValueAtom
+
+ValueAtom 
   = OPEN @ValueNode CLOSE
   / ValueConstant
   / ValueVariable
   / ValueBossBarProp
-  / ValueScore
-  / ValueDataPath
   / ValueSelector
   // ValueResLoc
-  / ValueLiteral
+  / LiteralValue
   
-
   LValue
     = ValueConstant
     / ValueVariable
@@ -195,17 +210,17 @@ ValueNode
   ValueDataPath
     = ValueDataPathStorage
     / ValueDataPathVar
-    / ValueDataPathEntity
     / ValueDataPathBlock
+    / ValueDataPathGeneric
         
-    ValueDataPathEntity
-      = selector:selector_single "::" path:nbt_path {
-          return V('DataPathEntity', { selector, path } )
+    ValueDataPathGeneric
+      = left:ValueAtom "::" right:nbt_path {
+          return V('DataPathGeneric', { left, right } )
         }
 
     ValueDataPathStorage
-      = "@@" name:resloc "::" path:nbt_path {
-          return V('DataPathStorage', { name, path } )
+      = "@@" left:ValueResLoc "::" path:nbt_path {
+          return V('DataPathGeneric', { name, path } )
         }
 
     ValueDataPathBlock
@@ -227,8 +242,8 @@ ValueNode
     }
 
   ValueScore 
-    = target:selector _ "->" _ name:string {
-      return V( 'Score', { target,name } )
+    = left:ValueAtom _ "->" _ right:ValueAtom {
+      return V( 'Score', { left,right } )
     } 
 
   ValueSelector 
@@ -240,11 +255,6 @@ ValueNode
     = "bossbar" __ resloc:resloc __ prop:IDENT {
       return V( 'BossBarProp', { resloc},{ prop } )
     } 
-
-  ValueLiteral
-    = value:typed_value {
-      return V('Literal',{value})
-    }
  
   ValueNativeCommand
     = "/" command:command_parts {
@@ -258,16 +268,16 @@ Assign
   / AssignBinary
 
   AssignScaled
-    = left:ValueNode EQUALS scale:AssignmentScale right:RValue {
+    = left:LValue EQUALS scale:AssignmentScale right:RValue {
         return I('AssignScaled',{left,right,scale})  
       } 
   AssignBinary
-    = left:ValueNode _ op:AssignOp _ right:RValue {
+    = left:LValue _ op:AssignOp _ right:RValue {
         return I(op ,{left,right})  
       } 
 
   AssignUnary
-    = left:ValueNode _ op:AssignOpUnary {
+    = left:LValue _ op:AssignOpUnary {
         return I(op ,{left})  
       } 
 
@@ -293,7 +303,7 @@ Assign
     / "--" { return 'AssignDec' }
     
 
-Assignment 'assignment'
+Assignment
   = AssignConstant
   / Assign
 
@@ -302,7 +312,7 @@ Assignment 'assignment'
   
     
   AssignConstant 
-    = name:arg_name EQUALS value:arg_value {
+    = name:arg_name EQUALS value:LiteralValue {
       return I('DeclareConstant',{value},{name})
     }
 
@@ -462,13 +472,6 @@ WrappedCommand
         return [ selector, anchor ]
       }
 
-  mod_arg_test 
-    = OPEN @test CLOSE
-    / __ @test
-  
-  mod_arg_test_inverse 
-    = OPEN @test_inverse CLOSE
-    / __ @test_inverse
   
   dir_number = @float !"deg"
   rot_angle = @float "deg"
@@ -870,32 +873,28 @@ WrappedCommand
 
 //\\ parts
 
+  ResPart = LiteralIdent/ValueConstant
+
   ValueResName 
-    = head:ident tail:("/" @ident)* {
-        return V('ResLoc',{ nameParts:[head,...tail] })
+    = nameParts:ResNameParts {
+        return V('ResLoc',{ nameParts })
       }
 
+  ResNameParts = head:ResPart tail:("/" @ResPart)* {
+    return [head,...tail]
+  }
 
   ValueResLoc 
-    = spec:resloc_spec {
-        return V('ResLoc', spec)
+    = ns:(@ResPart ":")? nameParts:ResNameParts {
+        return V('ResLoc', {ns,nameParts})
       }
 
-  ValueResTag 
-    = "#" spec:resloc_spec {
-        return V('ResTag', spec)
+  ValueResTag
+    = "#" ns:(@ResPart ":")? nameParts:ResNameParts {
+        return V('ResTag', {ns,nameParts})
       }
 
-  ValueResLocMc
-    = spec:resloc_spec {
-        return V('ResLoc', spec,{ defaultNs:'minecraft'})
-      }
-
-  ValueResTagMc
-    = "#" spec:resloc_spec {
-        return V('ResTag', spec,{ defaultNs:'minecraft'})
-      }
-
+ 
 
   resloc_spec
     = ns:(@ident ":")? 
@@ -1682,11 +1681,10 @@ WrappedCommand
       }
   Instruction 
     = Execution
-    / BlockArg 
     / Construct
     / WrappedConstruct
     
-    / CallSelf 
+    / PseudoCall 
     / CallFunctionTag
     / MacroCall 
 
@@ -1731,7 +1729,7 @@ Execution
         return V( 'ModFor', { arg } )
       }
     / "in" __ arg:ValueNode {
-      return V( 'ModifierIn', { arg } )
+      return V( 'ModIn', { arg } )
     }
     / "pos""itioned"? __ "as" __ arg:ValueNode { 
         return V( 'ModPositionedAs', { arg } )
@@ -1756,16 +1754,16 @@ Execution
     }
 //\\ construct  
   Construct 
-    = arg:Conditionals then:StatementOrBlock 
+    = test:Tests then:StatementOrBlock 
         otherwise:(__ "else" @StatementOrBlock)? {
-        return V('IfElse', { arg, then, otherwise } )
+        return V('IfElse', { test, then, otherwise } )
       }
     / "repeat" mods:(__ @mods:Modifiers)? 
       statements:StatementOrBlock? 
-      __ conds:LoopConditionals 
+      __ test:LoopTests
       then:(__ "then" @StatementOrBlock)? {
-        if (mods) return V('RepeatWithMods',{mods,statements,conds,then})
-        return V('Repeat',{statements,conds,then})
+        if (mods) return V('RepeatWithMods',{mods,statements,test,then})
+        return V('Repeat',{statements,test,then})
       }
     / "after" __ time:float unit:[tds] 
       statements:StatementOrBlock 
@@ -1774,14 +1772,14 @@ Execution
       }
     /  "every" __ time:float unit:[tds] 
         statements:StatementOrBlock 
-        conds:(__ @LoopConditionals)?
+        test:(__ @LoopTests)?
         then:(__ "then" @StatementOrBlock)? {
-          return V('Every',{statements,conds,time,then}, {unit} )
+          return V('Every',{statements,test,time,then}, {unit} )
       } 
     / "every" __ time:float unit:[tds] 
-      conds:(__ @LoopConditionals)
+      test:(__ @LoopTests)?
       then:(__ "then" @StatementOrBlock) {
-        return V('Every',{conds,time,then},{unit})
+        return V('Every',{test,time,then},{unit})
       }
       
   
@@ -1796,41 +1794,6 @@ Execution
       return I('NativeCommand',{command})
     }
 //\\ conditionals
-
-  Conditionals
-    = head:Conditional tail:(__ "and" __ @Conditional)* {
-        return N('Conditionals',{subs:[head,...tail]})
-      } 
-  TestTrue
-    = arg:mod_arg_test {
-        return N('ConditionalIf',{arg})
-      } 
-    / arg:mod_arg_test_inverse {
-        return N('ConditionalUnless',{arg})
-      } 
-
-  TestFalse = 
-    arg:mod_arg_test {
-        return N('ConditionalUnless',{arg})
-      } 
-    / arg:mod_arg_test_inverse {
-        return N('ConditionalIf',{arg})
-      } 
-  
-
-  Conditional
-    = "if" @TestTrue
-    / "unless" @TestFalse 
-    
-  LoopConditionals
-    = head:LoopConditional tail:(__ "and" __ @LoopConditional)* {
-      return N('Conditionals',{subs:[head,...tail]})
-    } 
-
-  LoopConditional
-    = "while" @TestTrue
-    / "until" @TestFalse
-
 
 //\\ block macros
   MacroCallSpec 
@@ -1860,17 +1823,16 @@ Execution
   CatchClause = __ "catch" __ @StatementOrBlock
   
 
-  BlockArg
+  PseudoCall
     = "reject" _ "(" _ ")" {
         return I('Reject')
       }
     / "resolve" _ "(" _ ")"  {
         return I('Resolve')
       }
-
-  CallSelf = "self" _ "(" _ ")" {
-    return I('CallSelf', {} )
-  }
+    / "self" _ "(" _ ")" {
+        return I('CallSelf', {} )
+      }
 
 
  
@@ -1885,3 +1847,171 @@ Execution
     }
 
   FunctionCallResloc = !RESERVED @resloc:resloc_or_tag _ OPEN _ CLOSE 
+
+
+
+
+
+  LiteralValue
+    = ValueConstant
+    / PseudoFunction
+    / LiteralArray
+    / LiteralObject
+    / LiteralScalar
+    
+
+
+  LiteralScalar
+    = LiteralBoolean
+    / LiteralString
+    / LiteralFloat
+    / LiteralInt 
+
+
+  LiteralBoolean 
+    = "true" {  return V('LiteralBoolean', {}, { value: true  } ) }
+    / "false" { return V('LiteralBoolean', {}, { value: false } ) }
+
+  LiteralInt
+    = value:INT ![.df]i suffix:[islb]i? { 
+      const Class = ({
+        i: 'LiteralInt',
+        b: 'LiteralByte',
+        l: 'LiteralLong',
+        s: 'LiteralShort'
+      })[suffix||"i"]
+      return V(Class, {}, {value})
+    }
+
+  LiteralFloat
+    = value:FLOAT ![islb]i suffix:[df]i? { 
+      const Class = ({
+        f: 'LiteralFloat',
+        d: 'LiteralDouble'
+      })[suffix||"f"]
+      return V(Class, {}, {value})
+    }
+    
+  LiteralArray
+    = "[" ___
+      items: (
+        head:ArrayItem
+        tail:(COMMA @ArrayItem)*
+        COMMA?
+        { return [head].concat(tail); }
+      )?
+      ___ "]"
+      { return V('LiteralArray', { items: items || [] } ) }
+
+    ArrayItem
+      = SpreadArray / LiteralValue
+    
+    SpreadArray
+      = "..." _ right:LiteralValue {
+        return V('SpreadArray',{right})
+      }
+  
+  LiteralObject
+    = "{" ___
+      props:(
+        head:ObjectProp tail:(COMMA @ObjectProp)* COMMA? {
+          return [head, ...tail];
+        }
+      )?
+      ___ "}"
+      { return V('LiteralObject', { props: props || [] } ) }
+    
+    ObjectProp
+      = SpreadObject
+      / key:(ObjectPropKey) _":" ___ value:LiteralValue {
+          return  V('LiteralProp', { key, value })
+        }
+    ObjectPropKey
+      = LiteralScalar
+
+    SpreadObject
+      = "..." _ right:LiteralValue {
+        return V('SpreadObject', {right})
+      }
+
+  LiteralString
+    = value:string_lit {
+      return V('LiteralString', { value } )
+    }
+
+  LiteralIdent
+    = value:IDENT {
+      return V('LiteralString', {},{ value } )
+    }
+
+  PseudoFunction
+    = "json" __ arg:LiteralValue {
+        return V('FunctionJson',{arg})
+      }
+    / "snbt" __ arg:LiteralValue {
+        return V('FunctionSnbt',{arg})
+      }
+
+  BlockSpec 
+  = resloc: (ValueConstant/ValueResLoc/ValueResTag)
+    states:(CONCAT @BlockStates)?
+    nbt:(CONCAT @LiteralObject)? {
+      return V('BlockSpec',{resloc,states,nbt})
+    }
+
+    BlockStates
+      = "[" ___
+        props:(
+          head:BlockState tail:(COMMA @BlockState)* COMMA? {
+            return [head, ...tail];
+          }
+        )?
+        ___ "]"
+        { return V('LiteralObject', { props: props || [] } ) }
+    
+    BlockState
+      = SpreadObject
+      / key:(ObjectPropKey) _"=" ___ value:LiteralValue {
+          return  V('LiteralProp', { key, value })
+        }    
+
+
+    Tests 
+      = head:Test tail:(__ "and" __ @Test)* {
+          return V('Tests',{tests:[head,...tail]})
+        }
+    
+    Test
+      = "if" __ arg:TestValue {
+          return V('TestTrue',{arg})
+        }
+      / "unless" __ arg:TestValue {
+        return V('TestFalse',{arg})
+      }
+
+
+    LoopTests 
+      = head:LoopTest tail:(__ "and" __ @LoopTest)* {
+          return V('Tests',{tests:[head,...tail]})
+        }
+    
+    LoopTest
+      = "while" __ arg:TestValue {
+          return V('TestTrue',{arg})
+        }
+      / "until" __ arg:TestValue {
+        return V('TestFalse',{arg})
+      }
+
+    TestValue
+      = OPEN @TestValue CLOSE
+      / ValuePredicate      
+      / BlockSpec
+      / ValueNode
+    
+    ValuePredicate
+      = "predicate" __ resloc:ValueResLoc {
+        return V('ValuePredicate',{resloc})
+      }
+
+

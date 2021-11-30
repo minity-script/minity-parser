@@ -15,8 +15,8 @@ exports.Scope = class Scope {
       this.setArg(name, args[name])
     }
   }
-
-  getArg = name => this.constants.get(name).value
+  getArg = name => this.constants.get(name).value.get('value')
+  //getArg = name => this.constants.get(name).value
   setArg = (name, value) => this.constants.declare(name, { value })
 }
 
@@ -72,12 +72,12 @@ class Score extends ScoreBoard {
   }
   static describe = name => "score ->" + name
   code = target => target + " " + this.objective
-  create = ({target}) => {
+  create = ({target,...rest}={}) => {
     const {objective} = this;
     if (typeof target!=='string') {
       assert(false,"not a string")
     }
-    return Compiler.ScoreboardEntry.create({objective,target})
+    return Compiler.ScoreboardEntry.create({objective,target,...rest})
   }
 }
 
@@ -89,9 +89,9 @@ class Variable extends ScoreBoard {
   }
   static describe = name => "variable $" + name
   code = () => this.target + " " + this.objective
-  create = () => {
+  create = ({...rest}={}) => {
     const {objective,target} = this;
-    return Compiler.ScoreboardEntry.create({objective,target})
+    return Compiler.ScoreboardEntry.create({objective,target,...rest})
   }
 }
 
@@ -101,9 +101,9 @@ class Constant extends ScopedItem {
     this.value = args.value
   }
   static describe = name => "constant ?" + name
-  create = () => {
+  create = ({...rest}={}) => {
     const {value} = this;
-    return Compiler.Literal.create({value})
+    return Compiler.Constant.create({value,...rest})
   }
 }
 

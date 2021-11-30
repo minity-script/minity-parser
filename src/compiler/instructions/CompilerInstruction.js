@@ -14,21 +14,18 @@ const CompilerInstruction = exports.CompilerInstruction = class CompilerInstruct
     if (code.length == 1) return code[0]
     const {file,start:{line}} = this.location;
     return this.frame.anonFunction([
-      `# ${basename(file)}:${line}`,
       ...code
     ])
   };
   getCode = () => {
-    const code = [].concat(this[CODE]()).filter(Boolean);
-    for (const line of code) {
-      if (typeof line === 'object') {
-        console.log(line?.describe)
-        throw new Error("WQR")
-        process.exit(-1)
-      }
+    try {
+      const code = [].concat(this[CODE]()).filter(Boolean);
+      return code;
+    } catch (error) {
+      console.log(error);
+      //process.exit()
+      this.rethrow(error)
     }
-    
-    return code;
   };
   doDeclare = () => {
     //console.log('doDeclare',this.describe)
@@ -64,6 +61,8 @@ const BinaryInstruction = exports.BinaryInstruction = class BinaryInstruction ex
         return this.binaryOp(left[id], right[id])
       }
     }
+//    console.log(this.right)
+    
     this.fail("invalid rvalue")
   };
 }

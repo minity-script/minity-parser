@@ -36,3 +36,11 @@ exports.resolveModulePath = (from,to) => {
   assert(existsSync(path),"module not found: "+path)
   return path;
 }
+
+
+exports.MinityError = class MinityError extends Error {
+  constructor(message, location) {
+    super(message);
+    this.location = location;
+  }
+}
