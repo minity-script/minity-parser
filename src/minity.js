@@ -57,7 +57,7 @@ const minity = {
   compileFile(file,{...rest}) {
     try {
       const text = readFileSync(file, { encoding: "utf8" });
-      return minity.compile(text,{file,...rest});
+      return minity.compile(text,{file,grammarSource:file,...rest});
     } catch (e) {
       e.file ??= file;
       if (e.location) e.location.file ??= file;

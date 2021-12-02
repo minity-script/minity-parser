@@ -11,7 +11,8 @@ const {
   PREPEND,
   MERGE,
   INSERT,
-  REMOVE
+  REMOVE,
+  VALUE
 } = require("../symbols");
 
 const {CompilerValue} = require("./CompilerValue");
@@ -22,12 +23,13 @@ const DataPath = class DataPath extends CompilerValue {
     this.path = path
   };
 
-
+   
   [OUTPUT] = {
     ...this[OUTPUT],
     'datapath': () => this.code,
     'getter': () => `run data get ${this.code} 1`,
-    'test_true': () => `data ${this.code}`
+    'test_true': () => `data ${this.code}`,
+    'template_expand': () => this.code
   };
 
   [OUTPUT_SCALED] = {
@@ -72,35 +74,32 @@ const DataPath = class DataPath extends CompilerValue {
 
 }
 
-exports.DataPathEntity = class DataPathEntity extends DataPath {
-  constructor({ selector, ...rest }) {
-    super(rest)
-    this.selector = selector
-    this.code = `entity ${this.selector} ${this.path}`
-  }
-}
-
-exports.DataPathStorage = class DataPathStorage extends DataPath {
-  constructor({ resloc, ...rest }) {
-    super(rest)
-    this.resloc = resloc
-    this.code = `storage ${this.resloc} ${this.path}`
-  }
-}
-
-exports.DataPathBlock = class DataPathBlock extends DataPath {
-  constructor({ position, ...rest }) {
-    super(rest)
-    this.position = position
-    this.code = `block ${this.position} ${this.path}`
-  }
-}
-
 exports.DataPathGeneric = class DataPathGeneric extends DataPath {
-  constructor({ left,right, ...rest }) {
+  constructor({ left,...rest }) {
     super(rest)
     this.left = left
-    this.path = right
     this.code = `${this.left.output('data_source')} ${this.path}`
   }
+  [VALUE] = {
+    ...this[VALUE],
+    'raw_component':()=>({
+      ...this.left.get('raw_data_source'),
+      path:this.path
+    }),
+  };
+}
+
+exports.DataPathVar = class DataPathVar extends DataPath {
+  constructor({...rest }) {
+    super(rest)
+    this.storage = `${this.frame.ns}:minity_vars`
+    this.code = `storage ${this.storage} ${this.path}`
+  }
+  [VALUE] = {
+    ...this[VALUE],
+    'raw_component':()=>({
+      storage: this.storage,
+      path:this.path
+    }),
+  };
 }

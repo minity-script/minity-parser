@@ -10,10 +10,12 @@
       const loc = location();
       const {file} = options;
       loc.file = file;
+      loc.source = options.source;
       const node = fn($,loc,...args)
       return node;  
     }
   }
+
   const N = FN(options.N);
   const V = FN(options.V);
   const I = FN(options.I);
@@ -77,17 +79,17 @@ file = ___ head:DeclareNamespace tail:(EOL @DeclareNamespace)* ___ {
 
   DeclareEvent 
     = "on" 
-      __ trigger:resloc_mc conditions:(CONCAT @object) 
+      __ trigger:ValueResLoc conditions:(CONCAT @LiteralObject) 
       __ "then" then:StatementOrBlock {
         return V('DeclareEvent',{trigger,conditions,then})
       }
 
 Directive
   =  "import" 
-    __ file:string {
+    __ file:LiteralString {
       return I('Import',{file})
     } 
-  / "define" __ resloc:ValueResLoc __ value:LiteralValue {
+  / "define" __ resloc:ValueResLoc __ value:LiteralObject {
     return I('DefineJson',{resloc,value})
   }
 //\\ compile-time constant
@@ -151,19 +153,23 @@ Declaration 'declaration'
   / DeclareTag
 
     DeclareTag 
-      = "tag" __ name:ident_lit &EOL {
+      = "tag" __ name:LiteralString &EOL {
         return I('DeclareTag',{name})
       }
   
     DeclareVar 
-      = "var" __ "$" name:IDENT value:(EQUALS @int)? {
+      = "var" __ "$" name:IDENT value:(EQUALS @RValue)? {
           return I('DeclareVar',{value},{name})
         }
   
     DeclareScore 
-      = "score" __ name:IDENT criterion:(__ @score_criterion)? {
+      = "score" __ name:IDENT criterion:(__ @CRITERION)? {
         return I('DeclareScore',{},{name,criterion})
       }
+    
+    CRITERION 'criterion'
+      = $([a-z]i [a-z0-9.:_-]i+)
+
 
 CompareOp 
     = ">=" { return 'OpGTE' }
@@ -173,7 +179,7 @@ CompareOp
     / "<" { return 'OpLT' }
     / ">" { return 'OpGT' }
 
-ValueNode
+ValueExpr
   = ValueCompare
 
 ValueCompare
@@ -188,34 +194,37 @@ ValueAccessor
   / ValueAtom
 
 ValueAtom 
-  = OPEN @ValueNode CLOSE
+  = Parens
   / ValueConstant
   / ValueVariable
-  / ValueBossBarProp
+  / ValueDataPathVar
   / ValueSelector
-  // ValueResLoc
+  / ValueBossBarProp
+  / ValuePosition
+  / ValueRotation
   / LiteralValue
-  
+
+  Parens 
+    = OPEN @ValueExpr CLOSE
   LValue
     = ValueConstant
     / ValueVariable
+    / ValueDataPathVar
     / ValueBossBarProp
     / ValueScore
     / ValueDataPath
-
+  
   RValue
     = Instruction
-    / ValueNode
+    / ValueExpr
 
   ValueDataPath
     = ValueDataPathStorage
-    / ValueDataPathVar
-    / ValueDataPathBlock
     / ValueDataPathGeneric
         
     ValueDataPathGeneric
-      = left:ValueAtom "::" right:nbt_path {
-          return V('DataPathGeneric', { left, right } )
+      = left:(ValueSelector/ValuePosition/ValueResLoc/Parens) "::" path:nbt_path {
+          return V('DataPathGeneric', { left, path } )
         }
 
     ValueDataPathStorage
@@ -223,13 +232,8 @@ ValueAtom
           return V('DataPathGeneric', { name, path } )
         }
 
-    ValueDataPathBlock
-      = position:Position "::" path:nbt_path {
-          return V('DataPathBlock', { position,path } )
-        }
-
-    ValueDataPathVar
-      = "@@" path:nbt_path { return N('ValueDataPathVar', { path } ) }
+  ValueDataPathVar
+    = "@@" path:nbt_path { return V('DataPathVar', { path } ) }
 
   ValueVariable 
     = "$" name:IDENT {
@@ -238,11 +242,16 @@ ValueAtom
 
   ValueConstant
     = "?" name:IDENT {
-      return V('Constant',{},{name})
-    }
+        return V('Constant',{},{name})
+      }
+
+  ValueTag 
+    = name: LiteralString {
+        return V('Tag',{name})
+      } 
 
   ValueScore 
-    = left:ValueAtom _ "->" _ right:ValueAtom {
+    = left:(ValueSelector/Parens) _ "->" _ right:(LiteralString/ValueConstant/Parens) {
       return V( 'Score', { left,right } )
     } 
 
@@ -252,7 +261,7 @@ ValueAtom
     } 
 
   ValueBossBarProp 
-    = "bossbar" __ resloc:resloc __ prop:IDENT {
+    = "bossbar" __ resloc:ValueResLoc __ prop:IDENT {
       return V( 'BossBarProp', { resloc},{ prop } )
     } 
  
@@ -307,10 +316,6 @@ Assignment
   = AssignConstant
   / Assign
 
-    lhand_scoreboard
-      = var_id / score_id
-  
-    
   AssignConstant 
     = name:arg_name EQUALS value:LiteralValue {
       return I('DeclareConstant',{value},{name})
@@ -371,30 +376,51 @@ MinityCommand
       return I('CmdTell',{selector,line})
     }
   / "append"
-    __ left:ValueNode
-    __ right:ValueNode {
+    __ left:LValue
+    __ right:RValue {
       return I('Append',{left,right})
     }
   / "prepend"
-    __ left:ValueNode
-    __ right:ValueNode {
+    __ left:LValue
+    __ right:RValue {
       return I('Prepend',{left,right})
     }
   / "merge"
-    __ left:ValueNode
-    __ right:ValueNode {
+    __ left:LValue
+    __ right:RValue {
       return I('Merge',{left,right})
     }
   / "insert"
-    __ index:ValueNode
-    __ left:ValueNode
-    __ right:ValueNode {
+    __ index:ValueAtom
+    __ left:LValue
+    __ right:RValue {
       return I('Merge',{index,left,right})
     }
   / "remove"
-    __ left:ValueNode {
+    __ left:LValue {
       return I('Remove',{left})
-    }    
+    }
+  / "tag" 
+    __ selector:ValueAtom 
+    __ tag:ValueExpr  {
+      return V('CmdTag',{selector,tag})
+    }
+  / "untag" 
+    __ selector:ValueAtom
+    __ tag:ValueExpr   {
+      return V('CmdUntag',{selector,tag})
+    }
+  / "bossbar" 
+    __ "add" 
+    __ resloc:(ValueResLoc/ValueConstant/Parens)
+    __ name:ValueAtom? {
+      return V('CmdBossbarAdd', { resloc, name} )
+    }
+  / "bossbar" 
+    __ "remove" 
+    __ resloc:(ValueResLoc/ValueConstant/Parens) {
+      return V('CmdBossbarRemove', { resloc } )
+  } 
 
 WrappedCommand
   = command:cmd {
@@ -402,12 +428,12 @@ WrappedCommand
   }
   cmd 
   = "summon" 
-    pos:(_ @Position)? 
+    position:(_ @ValuePosition)? 
     __ 
-    type:resloc_mc CONCAT 
+    type:ValueResLoc CONCAT 
     nbt:(@object)? 
     then:(__ "then" __ @StatementOrBlock )? {
-      return N('cmd_summon', { pos, type, nbt, then } )
+      return N('cmd_summon', { position, type, nbt, then } )
     }
   / "give" 
     selector:cmd_arg_selector_optional 
@@ -420,34 +446,12 @@ WrappedCommand
       return N('cmd_clear', { selector,...args } )
     }
   / "setblock" 
-    pos:(_ @Position)? 
+    position:(_ @ValuePosition)? 
     __
-    block:block_spec 
+    block:BlockSpec 
     mode: (__ @("destroy"/"keep"/"replace"))? {
-      return N('cmd_setblock', { pos, block, mode } )
+      return N('cmd_setblock', { position, block, mode } )
     }
-  / "bossbar" 
-    __ "add" 
-    __ id:resloc 
-    __ name:string? {
-      return N('bossbar_add', { id, name} )
-    }
-  / "bossbar" 
-    __ "remove" 
-    __ id:resloc {
-      return N('bossbar_remove', { id } )
-  } 
-  / "tag" 
-    __ selector:selector 
-    __ tag:tag_id  {
-      return N('tag_set',{selector,tag})
-    }
-  / "untag" 
-    __ selector:selector 
-    __ tag:tag_id  {
-      return N('tag_unset',{selector,tag})
-    }
-  
   
 
 //\\ directives
@@ -515,7 +519,7 @@ WrappedCommand
     = sort:sort_name __ "all" __ {
         return [N('cond_brackets_lit',{name:'sort',op:'include',value:sort})]
       }
-    / sort:sort_name limit:(__ @number) ? __ {
+    / sort:sort_name limit:(__ @(LiteralInt/ValueConstant/Parens)) ? __ {
       if (!limit) {
         return [
           N('cond_brackets_lit',{name:'sort',op:'include',value:sort}),
@@ -524,7 +528,7 @@ WrappedCommand
       }
       return [
         N('cond_brackets_lit',{name:'sort',op:'include',value:sort}),
-        N('cond_brackets',{name:'limit',op:'include',value:limit||1}),
+        N('cond_brackets',{name:'limit',op:'include',value:limit}),
       ]
     }
     
@@ -536,8 +540,8 @@ WrappedCommand
     }
 
     selector_initial_type
-    = type:resloc_or_tag_mc {
-      return N('selector_initial_type', { type } )
+    = type:(ValueResLoc/ValueResTag/ValueConstant) {
+      return N('selector_initial', { type } )
     }
 
   //\\ conditions
@@ -548,11 +552,11 @@ WrappedCommand
     condition_part = condition_tag/condition_brackets/condition_nbt
 
     condition_tag 'selector tag'
-    = CONCAT "." tag:tag_id { return [N('cond_tag', { op:'include', tag }) ]  }
-    / CONCAT "!" tag:tag_id  { return [N('cond_tag', { op:'exclude', tag }) ]   }
+    = CONCAT "." tag:(ValueTag/ValueConstant/Parens) { return [N('cond_tag', { op:'include', tag }) ]  }
+    / CONCAT "!" tag:(ValueTag/ValueConstant/Parens) { return [N('cond_tag', { op:'exclude', tag }) ]   }
 
     condition_nbt 'selector nbt'
-      = CONCAT value:object {
+      = CONCAT value:LiteralObject {
         return N('cond_brackets_nbt', {name:'nbt',op:'include',value} )
       }
 
@@ -566,10 +570,10 @@ WrappedCommand
     
     cond_brackets  
       =   node: 
-          (	 ($("d"? [xyz])     cond_op number )
-          /  (( "type" )        cond_op resloc_or_tag_mc )
-          /  (( "predicate" )   cond_op resloc )
-          /  (( "limit")        cond_op int)
+          (	 ($("d"? [xyz])     cond_op ValueExpr )
+          /  (( "type" )        cond_op (ValueResLoc/ValueResTag) )
+          /  (( "predicate" )   cond_op ValueResLoc )
+          /  (( "limit")        cond_op ValueExpr)
           /  (( "scores")       cond_op cond_brackets_scores)
           /  (( "advancements") cond_op cond_brackets_advancements)
           )
@@ -584,13 +588,13 @@ WrappedCommand
             const [name,op,value] = node;
             return N('cond_brackets_lit', {name,op,value} ) 
          }
-      /  node:(( "tag" / "team" / "name") cond_op string? ) {
+      /  node:(( "tag" / "team" / "name") cond_op ValueExpr? ) {
           const [name,op,value] = node;
           return N('cond_brackets', {name,op,value} )
         } 
-      / node:(( "nbt") cond_op object ) {
+      / node:(( "nbt") cond_op ValueExpr ) {
           const [name,op,value] = node;
-          return N('cond_brackets_nbt', {name,op,value} )
+          return N('cond_brackets', {name,op,value} )
         }
       / name:"level" _ value:int_range_match {
           return N('cond_brackets', {name,op:'include',value} )
@@ -598,7 +602,7 @@ WrappedCommand
       / name:("distance"/"x_rotation"/"y_rotation") _ value:range_match {
           return N('cond_brackets', {name,op:'include',value} )
       } 
-      / "->" _ name:score_objective _ value:int_range_match {
+      / "->" _ name:(LiteralString/ValueConstant/Parens) _ value:int_range_match {
           return N('cond_brackets_score', {name,op:'score',value} )
       }
     
@@ -631,7 +635,7 @@ WrappedCommand
         }
 
     cond_brackets_advancement
-      = name:resloc_mc EQUALS value:bool {
+      = name:resloc_mc EQUALS value:ValueExpr {
           return N('cond_brackets_pair', {name,value})
         }
       / BEGIN 
@@ -642,7 +646,7 @@ WrappedCommand
         }
 
     cond_brackets_advancement_criterion
-      = name:ident EQUALS value:bool {
+      = name:ident EQUALS value:ValueExpr {
           return N('cond_brackets_pair', {name,value})
         }
     
@@ -652,131 +656,14 @@ WrappedCommand
       / ( "random" / "any" ) { return "random" }
       / ( "arbitrary" / "oldest" ) { return "arbitrary" }
 
-
-  
-
-//\\ if_else
-  
-  //\\ test
-    test = test_predicate/test_datapath/test_scoreboard/test_entity/test_block
-
-    test_inverse = test_scoreboard_inverse
-
-
-    test_predicate = "predicate" __ predicate:resloc {
-      return N('test_predicate', { predicate } )
-    }
-    
-
-    test_entity = selector:selector {
-      return N('test_entity', { selector } )
-    }
-    
-    test_block 
-      = pos:Coords __ spec:block_spec {
-          return N('test_block_pos', { pos, spec } )
-      }
-      / spec:block_spec {
-        return N('test_block', { spec } )
-      } 
-
-    test_datapath = path:datapath {
-        return N('test_datapath', { path } )
-      }     
-
- 
-    
-
 //\\ scoreboard
-  var_name 'variable'
-    = "$" @IDENT 
-  var_id
-    = name:var_name {
-      return N('var_id',{name});
-    }
-  constant_id 
-    = value:int {
-      return N('constant_id',{value});
-    }
-  score_id 
-    = holder:score_holder _ "->" _ id:score_objective {
-      return N( 'score_id', { holder,id } )
-    }
    
-  tag_id 
-    = name:string {
-      return N('tag_id',{name})
-    }
-  score_objective 'score objective'
-    = string
-
-  score_holder 
-    = selector 
-    
-  scoreboard_id 
-    = var_id 
-    / constant_id 
-    / score_id
-  
-  score_criterion 'criterion'
-    = $([a-z]i [a-z0-9.:_-]i+)
 
 
-  //\\ test_scoreboard
-    test_scoreboard
-      = left:scoreboard_id _ right:int_range_match {
-          return N('test_scoreboard_range',{left,right})
-        }
-      / left:scoreboard_id _ op:test_scoreboard_op _ right:scoreboard_id {
-          return N('test_scoreboard',{left,op,right})
-        }
-      
-    test_scoreboard_inverse
-      = left:scoreboard_id _ "!=" _ right:scoreboard_id {
-          return N('test_scoreboard',{left,op:"=",right})
-        }
-      / id:lhand_scoreboard  {
-          return N('test_scoreboard_zero',{id})
-        }
-        
-
-    test_scoreboard_op 
-      = "<="
-      / ">="
-      / ">"
-      / "<"
-      / @"=" "="?
 
 //\\ nbt
   //\\ datapath
-    datapath
-      = spec:datapath_spec {
-        return N('datapath',{spec})
-      }
-      datapath_spec
-        = datapath_storage
-        / datapath_var
-        / datapath_entity
-        / datapath_block
-
-      datapath_entity 
-        = selector:selector_single "::" path:nbt_path {
-            return N('datapath_entity', { selector, path } )
-          }
-
-      datapath_storage 
-        ="@@" name:resloc "::" path:nbt_path {
-            return N('datapath_storage', { name, path } )
-          }
-
-      datapath_block 
-        =position:Position "::" path:nbt_path {
-            return N('datapath_block', { position,path } )
-          }
-
-      datapath_var 
-      = "@@" path:nbt_path { return N('datapath_var', { path } ) }
-
+  
     
   //\\ nbt_path
     nbt_path 
@@ -785,64 +672,39 @@ WrappedCommand
         }
 
       nbt_path_head 
-        = nbt_path_root
+        = nbt_path_step
         / nbt_path_match
         / nbt_path_bracket
 
       nbt_path_tail 
-        = @nbt_path_member 
+        = nbt_path_member 
         / nbt_path_bracket
 
-      nbt_path_root 
-        = member:nbt_path_step {
-            return N('nbt_path_root',member)
-          }
-
-
       nbt_path_member 
-        = "." member:nbt_path_step {
-            return N('nbt_path_member',member)
+        = "." step:nbt_path_step {
+            return N('nbt_path_member',{step})
           }
 
       nbt_path_step 
-        = name:string match:nbt_path_match? {
-            return {name,match}
+        = name:LiteralString match:nbt_path_match? {
+            return N('nbt_path_step',{name,match})
           }
-
-      nbt_path_part
-        = "{}"
-          / nbt_path_ident
-          / nbt_path_match
-          / nbt_path_bracket
 
       nbt_path_bracket 
-        = nbt_path_list_match
-          / nbt_path_list
-          / nbt_path_list_element
-
-      nbt_path_list_element
-        = "[" index:int "]" {
+        = "[" match:LiteralObject "]" {
+            return N('nbt_path_list_match',{match})
+          } 
+        / "[" index:ValueAtom "]" {
             return N('nbt_path_list_element',{index})
           }
-
-      nbt_path_list
-        = "[]" {
+        / "[]" {
             return N('nbt_path_list')
           }
 
-
-      nbt_path_list_match 
-        = "[" match:object "]" {
-            return N('nbt_path_list_match',{match})
-          } 
-
       nbt_path_match 
-        = match:object_lit {
+        = match:LiteralObject {
             return N('nbt_path_match',{match})
           }
-
-      nbt_path_ident 
-        = string
 
 
       
@@ -851,22 +713,9 @@ WrappedCommand
     
 
 //\\ block_spec
-  block_spec 'block predicate'
-    = resloc:resloc_or_tag_mc CONCAT states:block_states? CONCAT nbt:(@object)? {
-        return N('block_spec',{resloc,states,nbt})
-      }
-
-    block_states 
-      = "[" ___ head:block_state tail:( COMMA @block_state)* ___ "]" {
-          return N('block_states',{states:[head,...tail]})
-        }
-    block_state 
-      = name:ident EQUALS value:(bool/number/string) {
-          return N('block_state',{name,value})
-        } 
-
+ 
     item_spec 'item predicate'
-      = resloc:resloc_or_tag_mc CONCAT nbt:(@object)? {
+      = resloc:(ValueResLoc/ValueResTag) CONCAT nbt:(@LiteralObject)? {
           return N('item_spec',{resloc,nbt})
         }
 
@@ -888,6 +737,12 @@ WrappedCommand
     = ns:(@ResPart ":")? nameParts:ResNameParts {
         return V('ResLoc', {ns,nameParts})
       }
+
+  ValueResLocFull
+    = ns:(@ResPart ":") nameParts:ResNameParts {
+        return V('ResLoc', {ns,nameParts})
+      }
+
 
   ValueResTag
     = "#" ns:(@ResPart ":")? nameParts:ResNameParts {
@@ -991,7 +846,7 @@ WrappedCommand
     / string
 
 
-  typed_value "typed value"
+  typed_value 
     = typed_value_arg
     / typed_value_lit
 
@@ -1224,14 +1079,18 @@ WrappedCommand
     
     template_arg 
       = name:arg_name {
-          return N('arg', { type:'template',name } ) 
+          return N('arg', { name } ) 
         }
 
 
     template_lit  
-      = '"' parts:template_part* '"' {
-        return N('template_lit', { type:'template', parts } )
+      = '"' @template_content '"' 
+
+    template_content  
+      = parts:template_part* {
+        return N('template_lit', { parts } )
       }
+
 
     template_parts 
       = parts:template_part* {
@@ -1240,68 +1099,40 @@ WrappedCommand
 
     template_part 
       = template_expand
+      / template_expand_value
       / template_chars
 
     template_expand
-      = template_expand_arg
-      / template_expand_value
-      / template_expand_var
+      = template_expand_json
       / template_expand_tag
       / template_expand_score
-      / template_expand_score_id
-      / template_expand_selector
-      / template_expand_coords
 
     template_chars  
       = chars:(@template_char)+ {
           return N('template_chars', { chars:chars.join('') } )
         }
-    
-    template_sep  
-      = chars:[{}] {
-          return N('template_chars', { chars } )
-        }
 
 	  template_char 
     	= ![{}"] @char
       / "\\" @.
-        
-    template_expand_arg  
-      = "{?" name:template_parts "}" {
-          return N('template_expand_arg', { name } )
-        }
-    template_expand_value  
-    = "{=" value:(value/&{expected("value")}) "}" {
-        return N('template_expand_value', { value } )
+
+    template_expand_json  
+    = "{=" value:LiteralValue "}" {
+        return N('template_expand_json', { value } )
       }
     template_expand_tag  
-      = "{." name:template_parts "}" {
+      = "{." name:TemplateContent "}" {
           return N('template_expand_tag', { name } )
         }
 
-    template_expand_var  
-      = "{$" name:template_parts "}" {
-          return N('template_expand_var', { name } )
-        }
-    
     template_expand_score  
-      = "{->" name:template_parts "}" {
+      = "{->" name:template_content"}" {
           return N('template_expand_score', { name } )
         }
 
-    template_expand_score_id  
-      = "{" id:score_id "}" {
-          return N('template_expand_score_id', { id } )
-        }
-        
-    template_expand_selector
-      = "{" &(selector_sort? "@" !"@") selector:(@selector/&{expected('selector')}) "}" {
-          return N('template_expand_selector', { selector } )
-        }
-	
-    template_expand_coords
-      = "{" &"(" coords:(@Position/&{expected('coordinates')}) "}" {
-          return N('template_expand_coords', { coords } )
+    template_expand_value  
+      = "{" value:ValueExpr "}" {
+          return N('template_expand_value', { value } )
         }
         
     
@@ -1403,7 +1234,7 @@ WrappedCommand
       return N('raw_tag',{tag,attr});
     }
 
-    raw_attr = name:ident EQUALS value:value {
+    raw_attr = name:ident EQUALS value:LiteralValue {
       return {name,value}
     }
 
@@ -1442,32 +1273,13 @@ WrappedCommand
 
 
   raw_expand
-    = template_expand_arg
-    / raw_expand_var
-    / raw_expand_score_id
-    / raw_expand_nbt
-    / template_expand_value
-    / template_expand_tag
-    / template_expand_score
-    / template_expand_selector
-    / template_expand_coords
+    = template_expand
+    / raw_expand_value
     
-    raw_expand_var  
-      = "{$" name:template_parts "}" {
-          return N('raw_expand_var', { name } )
+    raw_expand_value  
+      = "{" value:ValueExpr "}" {
+          return N('raw_expand_value', { value } )
         }
-    
-    raw_expand_nbt
-      = "{" spec:datapath_spec "}" {
-        return N('raw_expand_nbt', { spec } )
-      }
-
-
-    raw_expand_score_id  
-      = "{" holder:score_holder _ "->" _ id:score_objective "}" {
-          return N('raw_expand_score_id', { holder, id } )
-        }
-
 
 //\\ TOKENS
   LT = "<" _
@@ -1569,102 +1381,6 @@ WrappedCommand
     = "deg"
 
 
-//\\ POSITION AND COORDINATES
-
-  Position 
-    = OPEN @Coords CLOSE / NativeCoords
-  
-  Coords 
-    = RelativeCoords 
-    / LocalCoords 
-    / NativeCoords
-  
-  RelativeCoords
-    = head: RelativeCoord tail:(__ @RelativeCoord)* {
-      return N('RelativeCoords',{ _coords: [head, ...tail]} )
-    }
-    
-  RelativeCoord
-    = "east"  __ d:Coord { return { axis:'x', f:+1, d } }
-    / "west"  __ d:Coord { return { axis:'x', f:-1, d } }
-    / "up"    __ d:Coord { return { axis:'y', f:+1, d } }
-    / "down"  __ d:Coord { return { axis:'y', f:-1, d } }
-    / "south" __ d:Coord { return { axis:'z', f:+1, d } }
-    / "north" __ d:Coord { return { axis:'z', f:-1, d } }
-  
-  LocalCoords
-    = head: LocalCoord tail:(__ @LocalCoord)* {
-      return N('LocalCoords',{ _coords: [head, ...tail]} )
-    }
-
-  LocalCoord
-    = "left"        __ d:Coord { return { axis:'x', f:+1, d } }
-    / "right"       __ d:Coord { return { axis:'x', f:-1, d } }
-    / "upward"      __ d:Coord { return { axis:'y', f:+1, d } }
-    / "downward"    __ d:Coord { return { axis:'y', f:-1, d } }
-    / "forward"     __ d:Coord { return { axis:'z', f:+1, d } }
-    / "back""ward"? __ d:Coord { return { axis:'z', f:-1, d } }
-
-  NativeCoords
-    = NativeLocalCoords
-    / NativeWorldCoords
-  
-  NativeWorldCoords 
-    = x: NativeCoord __ y: NativeCoord  __ z: NativeCoord {
-        return N('NativeCoords',{x,y,z})
-      }
-      
-  NativeCoord 
-    = TildeCoord 
-    / Coord
-
-  NativeLocalCoords 
-    = x: CaretCoord __ y: CaretCoord  __ z: CaretCoord {
-         return N('NativeCoords',{x,y,z} )
-      }
-  
-  Rotation 
-    = OPEN @Angles CLOSE / NativeAngles
-  
-
-  Angles
-  	= NativeAngles / RelativeAngles
-    
-  NativeAngles
-  	= x:NativeCoord "deg"? __ y:NativeCoord "deg"? {
-      return N('NativeAngles',{x,y} )
-   }
-  
-  RelativeAngles
-  	= head: RelativeAngle tail:(__ @RelativeAngles)* {
-      return N('RelativeAngles',{ _coords: [head, ...tail]} )
-    } 
-  
-  RelativeAngle
-    = "left"        __ d:Angle { return { axis:'x', f:+1, d } }
-    / "right"       __ d:Angle { return { axis:'x', f:-1, d } }
-    / "up" 		      __ d:Angle { return { axis:'y', f:+1, d } }
-    / "down"    	  __ d:Angle { return { axis:'y', f:-1, d } }
-    
-
-  Coord 
-    = float
-
-  Angle 
-    = @float "deg"
-
-  TildeCoord 
-    = "~" arg:Coord?  {
-        return N('TildeCoord',{arg})
-      }
-
-  CaretCoord 
-    = "^" arg:Coord  {
-        return N('CaretCoord',{arg})
-      }
-      
-
-
 
 /*---------------------------------------------------------------------*/
   Statements 
@@ -1716,40 +1432,40 @@ Execution
     / "anchored" arg:mod_arg_anchor {
         return V( 'ModAnchored', {}, { arg } )
       }
-    / "as" __ arg:ValueNode { 
+    / "as" __ arg:ValueAtom { 
         return V( 'ModAs', { arg } )
       }
-    / "at" __ arg:ValueNode { 
+    / "at" __ arg:ValueAtom { 
         return V( 'ModAt', { arg } )
       }
     / "facing" arg:mod_arg_selector_anchor { 
         return V( 'ModFacing', {arg} )
       }
-    / "for" __ arg:ValueNode { 
+    / "for" __ arg:ValueAtom { 
         return V( 'ModFor', { arg } )
       }
-    / "in" __ arg:ValueNode {
+    / "in" __ arg:ValueAtom {
       return V( 'ModIn', { arg } )
     }
-    / "pos""itioned"? __ "as" __ arg:ValueNode { 
+    / "pos""itioned"? __ "as" __ arg:ValueAtom { 
         return V( 'ModPositionedAs', { arg } )
       }
-    / "pos""itioned"? __ arg:Position { 
+    / "pos""itioned"? __ arg:ValueAtom { 
         return V( 'ModPositioned', { arg } )
       }
-    / "rot""ated"? __ "as" __ arg:ValueNode { 
+    / "rot""ated"? __ "as" __ arg:ValueAtom { 
         return V( 'ModRotatedAs', { arg } )
       }
-    / "rot""ated"? __ arg:Position { 
+    / "rot""ated"? __ arg:ValueAngles { 
         return V( 'ModRotated', { arg } )
       }
-    / arg:RelativeAngles {
+    / arg:AnglesRelative {
       return V('ModRotated', { arg } )
     }
-    / arg:RelativeCoords {
+    / arg:DirectionsRelative {
       return V('ModPositioned', { arg } )
     }
-    / arg:LocalCoords {
+    / arg:DirectionsLocal {
       return V('ModPositioned', { arg } )
     }
 //\\ construct  
@@ -1765,21 +1481,21 @@ Execution
         if (mods) return V('RepeatWithMods',{mods,statements,test,then})
         return V('Repeat',{statements,test,then})
       }
-    / "after" __ time:float unit:[tds] 
+    / "after" __ time:ValueTime
       statements:StatementOrBlock 
       then:(__ "then" @StatementOrBlock)? {
-        return V('After', { time, statements, then }, {unit} )
+        return V('After', { time, statements, then } )
       }
-    /  "every" __ time:float unit:[tds] 
+    /  "every" __ time:ValueTime 
         statements:StatementOrBlock 
         test:(__ @LoopTests)?
         then:(__ "then" @StatementOrBlock)? {
-          return V('Every',{statements,test,time,then}, {unit} )
+          return V('Every',{statements,test,time,then})
       } 
-    / "every" __ time:float unit:[tds] 
+    / "every" __ time:ValueTime 
       test:(__ @LoopTests)?
       then:(__ "then" @StatementOrBlock) {
-        return V('Every',{test,time,then},{unit})
+        return V('Every',{test,time,then})
       }
       
   
@@ -1836,20 +1552,10 @@ Execution
 
 
  
-  FunctionCall
-    =  resloc:FunctionCallResloc {
-      return N('FunctionCall', { resloc } )
-    }
-
   CallFunctionTag
-    =  restag:restag _ OPEN _ CLOSE {
+    =  restag:ValueResTag _ OPEN _ CLOSE {
       return I('CallFunctionTag', { restag } )
     }
-
-  FunctionCallResloc = !RESERVED @resloc:resloc_or_tag _ OPEN _ CLOSE 
-
-
-
 
 
   LiteralValue
@@ -1857,9 +1563,9 @@ Execution
     / PseudoFunction
     / LiteralArray
     / LiteralObject
+    / LiteralRaw
     / LiteralScalar
     
-
 
   LiteralScalar
     = LiteralBoolean
@@ -1867,10 +1573,12 @@ Execution
     / LiteralFloat
     / LiteralInt 
 
-
   LiteralBoolean 
     = "true" {  return V('LiteralBoolean', {}, { value: true  } ) }
     / "false" { return V('LiteralBoolean', {}, { value: false } ) }
+
+  
+
 
   LiteralInt
     = value:INT ![.df]i suffix:[islb]i? { 
@@ -1884,14 +1592,20 @@ Execution
     }
 
   LiteralFloat
-    = value:FLOAT ![islb]i suffix:[df]i? { 
+    = value:(FLOAT/INT) ![islb]i suffix:[df]i? { 
       const Class = ({
         f: 'LiteralFloat',
         d: 'LiteralDouble'
       })[suffix||"f"]
       return V(Class, {}, {value})
     }
-    
+
+  LiteralUntypedNumber
+    = value:(FLOAT/INT) {
+      return V('LiteralFloat', {}, {value})
+    }
+
+
   LiteralArray
     = "[" ___
       items: (
@@ -1935,7 +1649,19 @@ Execution
       }
 
   LiteralString
-    = value:string_lit {
+    = LiteralTemplate
+    / LiteralIdent
+
+  LiteralRaw
+    = value:raw_tag {
+      return V('LiteralRaw',{value})
+    }
+
+  LiteralTemplate
+    = '"' @TemplateContent '"'
+
+  TemplateContent
+    = value:template_content {
       return V('LiteralString', { value } )
     }
 
@@ -1952,12 +1678,18 @@ Execution
         return V('FunctionSnbt',{arg})
       }
 
-  BlockSpec 
-  = resloc: (ValueConstant/ValueResLoc/ValueResTag)
-    states:(CONCAT @BlockStates)?
-    nbt:(CONCAT @LiteralObject)? {
-      return V('BlockSpec',{resloc,states,nbt})
+  BlockPredicate
+    = OPEN position:ValueCoords __ block:BlockSpec CLOSE {
+      return V('BlockPredicate',{position,block})
     }
+    / BlockSpec
+
+  BlockSpec 
+    = resloc: (ValueConstant/ValueResLoc/ValueResTag)
+      states:(CONCAT @BlockStates)?
+      nbt:(CONCAT @LiteralObject)? {
+        return V('BlockSpec',{resloc,states,nbt})
+      }
 
     BlockStates
       = "[" ___
@@ -2006,12 +1738,108 @@ Execution
     TestValue
       = OPEN @TestValue CLOSE
       / ValuePredicate      
-      / BlockSpec
-      / ValueNode
+      / BlockPredicate
+      / ValueExpr
     
     ValuePredicate
       = "predicate" __ resloc:ValueResLoc {
         return V('ValuePredicate',{resloc})
       }
 
+ValueTime
+  = value:(LiteralUntypedNumber/Parens)
+    unit:[tds] {
+      return V('Time',{value},{unit})
+    }
 
+
+ValuePosition 
+    = OPEN @ValueCoords CLOSE 
+    
+  ValueCoords 
+    = DirectionsRelative
+    / DirectionsLocal
+    / PositionLocal
+    / PositionWorld
+  
+  DirectionsRelative
+    = head: DirectionRelative tail:(__ @DirectionRelative)* {
+      return V('DirectionsRelative',{ directions: [head, ...tail]} )
+    }
+    
+  DirectionRelative
+    = direction:DirectionRelativeName __ arg:ValueAtom {
+        return V('DirectionRelative', { arg } , { direction } ) 
+      }
+  DirectionRelativeName
+    = "east"  
+    / "west"  
+    / "up"    
+    / "down"  
+    / "south" 
+    / "north" 
+
+  DirectionsLocal
+    = head: DirectionLocal tail:(__ @DirectionLocal)* {
+      return V('DirectionsLocal',{ directions: [head, ...tail]} )
+    }
+    
+  DirectionLocal
+    = direction:DirectionLocalName __ arg:ValueAtom {
+        return V('DirectionLocal', { arg } , { direction } ) 
+      }
+
+  DirectionLocalName
+    = "left"        
+    / "right"       
+    / "upward"      
+    / "downward"    
+    / "forward"     
+    / "back""ward"? { return "back" }
+
+  PositionLocal
+    = "^" x:ValueAtom? __ "^" y:ValueAtom? __ "^" z:ValueAtom? {
+        return V('PositionLocal',{x,y,z})  
+      }
+
+  PositionWorld
+    = x:CoordWorld __ y:CoordWorld __ z:CoordWorld {
+        return V('PositionWorld',{x,y,z})  
+      }
+
+  CoordWorld
+    = tilde:"~" arg:ValueAtom? {
+        return V('CoordWorld',{arg},{relative:!!tilde})  
+      }
+    / arg:ValueAtom {
+        return V('CoordWorld',{arg},{relative:false})  
+      }
+
+  ValueRotation
+    = OPEN @ValueAngles CLOSE
+
+  ValueAngles
+    = AnglesRelative
+    / RotationWorld
+
+  AnglesRelative
+    = head: AngleRelative 
+      tail:(__ @AngleRelative)* {
+        return V('AnglesRelative',{ directions: [head, ...tail]} )
+      }
+    
+  AngleRelative
+    = direction:AngleRelativeName 
+      __ arg:(LiteralUntypedNumber/Parens) "deg" {
+        return V('AngleRelative', { arg } , { direction } ) 
+      }
+  AngleRelativeName
+    = "up"    
+    / "down"  
+    / "left" 
+    / "right" 
+
+  RotationWorld
+    = x:CoordWorld __ y:CoordWorld {
+        return V('RotationWorld',{x,y})  
+      }

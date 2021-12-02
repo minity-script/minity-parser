@@ -15,7 +15,7 @@ const CompilerNode = exports.CompilerNode = class CompilerNode {
     return new this(args)
   }
   static createFrom(src,args) {
-    const {frame,location} = this;
+    const {frame,location} = src;
     return this.create({...args,frame,location})
   }
   constructor({frame,location}) {
@@ -33,30 +33,45 @@ const CompilerNode = exports.CompilerNode = class CompilerNode {
     }
     return found;
   }
-  output = type => {
-    const output = this.findOutput(type);
-    this.assert (output, "cannot output as "+type)
-    try {
-      return output()
-    } catch (error) {
-      console.error('failed',this.describe,type,output,error.message)
-      this.rethrow(error,error.location||this.location)
-    }
-  }
   canOutput = type => {
     return !!this.findOutput(type)
   };
+  output = type => {
+    const output = this.findOutput(type);
+    this.assert (output, `cannot output ${this.describe} as ${type}`)
+    try {
+      return output()
+    } catch (error) {
+      this.rethrow(error,error.location||this.location)
+    }
+  }
+
+  findGet = (type,tried=[]) => {
+    console.log('findGet',this.describe,type)
+    let found = this[VALUE][type];
+    if (!found) {
+      for (const id in this[CONVERT]) {
+        if (tried.contains(id)) continue
+        const converted = this[CONVERT][id]()
+        found = converted && converted.findGet(type,[...tried,id]);
+        if (found) break
+      }
+    }
+    return found;
+  }
 
   get = type => {
-    this.assert (this.canGet(type),"cannot get as "+type)
+    console.log('get',this.describe,type)
+    const get = this.findGet(type);
+    this.assert (get, `cannot output ${this.describe} as ${type}`)
     try {
-      return this[VALUE][type]()
+      return get()
     } catch (error) {
-      this.rethrow(error)
+      this.rethrow(error,error.location||this.location)
     }
   }
   canGet = type => {
-    return !!this[VALUE][type]
+    return !!this.findGet(type)
   };
   
   assert = (test,msg) => {
@@ -67,7 +82,7 @@ const CompilerNode = exports.CompilerNode = class CompilerNode {
   }
 
   rethrow = error => {
-    if (error instanceof MinityError) throw error
+    //if (error instanceof MinityError) throw error
     error.location ||= this.location
     throw error
     this.fail(error.message||String(error),error.location||this.location)
@@ -75,5 +90,9 @@ const CompilerNode = exports.CompilerNode = class CompilerNode {
 
   get describe () {
     return this.constructor.name
+  }
+
+  toString() {
+    return `[object ${this.describe}]`
   }
 }

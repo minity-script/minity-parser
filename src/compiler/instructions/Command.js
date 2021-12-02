@@ -53,3 +53,52 @@ const CmdTell = exports.CmdTell = class CmdTell extends Command {
     return `tellraw ${selector.output('selector')} ${JSON.stringify(line)}`
   }
 }
+
+const CmdTag = exports.CmdTag = class CmdTag extends Command {
+  constructor({ selector, tag, ...rest }) {
+    super(rest);
+    this.tag = tag
+    this.selector=selector
+  };
+  [CODE] = () => {
+    const { selector, tag } = this
+    return `tag ${selector.output('selector')} add ${tag.output('tag')}`
+  }
+}
+
+const CmdUntag = exports.CmdUntag = class CmdUntag extends Command {
+  constructor({ selector, tag, ...rest }) {
+    super(rest);
+    this.tag = tag
+    this.selector=selector
+  };
+  [CODE] = () => {
+    const { selector, tag } = this
+    return `tag ${selector.output('selector')} remove ${tag.output('tag')}`
+  }
+}
+
+
+const CmdBossbarAdd = exports.CmdBossbarAdd = class CmdBossbarAdd extends Command {
+  constructor({ resloc, name, ...rest }) {
+    super(rest);
+    this.resloc = resloc
+    this.name = name
+  };
+  [CODE] = () => {
+    const { resloc, name } = this
+    if (name) return `bossbar add ${resloc.output('resloc')} ${name.output('json')}`
+    else return `bossbar add ${resloc.output('resloc')}`
+  }
+}
+
+const CmdBossbarRemove = exports.CmdBossbarRemove = class CmdBossbarRemove extends Command {
+  constructor({ resloc, ...rest }) {
+    super(rest);
+    this.resloc = resloc
+  };
+  [CODE] = () => {
+    const { resloc } = this
+    return `bossbar remove ${resloc.output('resloc')}`
+  }
+}

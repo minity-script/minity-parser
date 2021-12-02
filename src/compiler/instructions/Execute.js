@@ -81,7 +81,9 @@ exports.ModFacing = class ModFacing extends Mod {
 }
 
 exports.ModIn = class ModIn extends Mod {
-  oldStyle = resloc => `in $${resloc}`
+  [MOD_ARG] = {
+    resloc: resloc => `in $${resloc}`
+  }
 }
 
 exports.ModPositionedAs = class ModAs extends Mod {
@@ -97,11 +99,14 @@ exports.ModRotatedAs = class ModAs extends Mod {
 }
 
 exports.ModPositioned = class ModPositioned extends Mod {
-  oldStyle = position => `positioned ${position}`
+  [MOD_ARG] = {
+    position: position => `positioned ${position}`
+  }
 }
 
 exports.ModRotated = class ModRotated extends Mod {
-  oldStyle = rotation => `rotated ${rotation}`
-
+  [MOD_ARG] = {
+    rotation: rotation => `rotated ${rotation}`
+  }
 }
 

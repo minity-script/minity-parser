@@ -45,7 +45,7 @@ const CallFunctionTag = exports.CallFunctionTag = class CallFunctionTag extends 
     super(rest)
     this.restag = restag;
   };
-  [CODE] = () => "function " + this.restag;
+  [CODE] = () => "function " + this.restag.output('restag');
 }
 
 const MacroCall = exports.MacroCall = class MacroCall extends CompilerInstruction {
@@ -160,7 +160,6 @@ const After = exports.After = class After extends CompilerInstruction {
   constructor({ time, unit, statements, then, ...rest }) {
     super(rest)
     this.time = time
-    this.unit = unit
     this.then = then
     this.statements = statements
   }
@@ -172,15 +171,14 @@ const After = exports.After = class After extends CompilerInstruction {
       ...code,
       ...thenCode
     ])
-    return `schedule ${fn} ${time}${unit}`
+    return `schedule ${fn} ${time.output('time')}`
   }
 }
 
 const Every = exports.Every = class Every extends CompilerInstruction {
-  constructor({ test, then, statements, time, unit, ...rest }) {
+  constructor({ test, then, statements, time, ...rest }) {
     super(rest)
     this.time = time
-    this.unit = unit
     this.then = then
     this.statements = statements
     this.test = test
@@ -191,22 +189,22 @@ const Every = exports.Every = class Every extends CompilerInstruction {
     if (!test) {
       const fn = frame.anonFunction(resloc => [
         ...code,
-        `schedule function ${resloc} ${time}${unit}`
+        `schedule function ${resloc} ${time.output('time')}`
       ])
-      return `schedule ${fn} ${time}${unit}`
+      return `schedule ${fn} ${time.output('time')}`
     }
     if (!then) {
       const fn = frame.anonFunction(resloc => [
         ...code,
         `execute ${test.output('test')} run schedule function ${resloc}`
       ])
-      return `schedule ${fn} ${time}${unit}`
+      return `schedule ${fn} ${time.output('time')}`
     }
     const fn = frame.anonFunction(resloc => [
       ...code,
-      ...ifElseCode(frame.ns, test.output('test'), `schedule function ${resloc} ${time}${unit}`, then.output('instruction'))
+      ...ifElseCode(frame.ns, test.output('test'), `schedule function ${resloc} ${time.output('time')}`, then.output('instruction'))
     ])
-    return `schedule ${fn} ${time}${unit}`
+    return `schedule ${fn} ${time.output('time')}`
   }
 }
 

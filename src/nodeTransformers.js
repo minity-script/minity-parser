@@ -51,56 +51,53 @@ const transformers = exports.transformers = {
     let values = items.map(T).flat()
     return Nbt(values)
   },
-  template_lit: ({ parts }, { T, Nbt }) => Nbt(parts.map(Nbt).join("")),
+  template_lit: ({ parts }, { T, Nbt }) => {    console.log(parts)
+    return Nbt(parts.map(part=>{
+      return T(part);
+    }).join(""))
+  },
 
 
   arg: ({ name }, { scope }) => scope.getArg(name),
 
-  selector_spec: ({ initial, conditions }, { T, toNbt }) => {
+  selector_spec: ({ initial, conditions }, { T}) => {
     const spec = T(initial);
     for (const c of conditions) T(c, { spec });
     return spec
   },
   selector_uuid: ({ uuid }, T) => new SelectorUUID(T(uuid)),
   selector: ({ spec }, { T }) => T(spec).format(),
-  selector_single: ({ spec }, { T, toNbt }) => {
+  selector_single: ({ spec }, { T }) => {
     const it = T(spec);
     assert(it.isSingle, "Selector must select a single entity")
     return it.format();
   },
-  selector_optional: ({ spec }, { T, toNbt }) => {
+  selector_optional: ({ spec }, { T }) => {
     if (spec) return T(spec).format();
-    return new Selector("s").format();
+    return new Selector({initial:"s"}).format();
   },
-  selector_initial: ({ initial }) => new Selector(initial),
-  selector_initial_type: ({ type }, { T }) => new Selector(T(type)),
-  cond_tag: ({ op, tag }, { T }, { spec }) => spec[op]("tag", T(tag).id),
+  selector_initial: ({ initial,type },{T}) => new Selector({initial,type:type && T(type)}),
+  cond_tag: ({ op, tag }, { T }, { spec }) => {
+    spec[op]("tag", T(tag), true)
+  },
   cond_brackets: ({ name, op, value }, { T }, { spec }) => {
-    //if (!value) console.log(name,op,value)
-    spec[op](name, T(value))
+    spec[op](name, T(value),true)
   },
   cond_brackets_lit: ({ name, op, value }, { T }, { spec }) => {
     spec[op](name, value)
   },
   cond_brackets_score: ({ name, value }, { T, scope }, { spec }) => {
-    const score = scope.objectives.get(T(name));
+    const score = scope.objectives.get(T(name).get('string'));
     spec.score(score.objective, T(value))
   },
-  cond_brackets_nbt: ({ name, op, value }, { T, toNbt }, { spec }) => {
-    spec[op](name, toNbt(value))
+  cond_brackets_nbt: ({ name, op, value }, { T }, { spec }) => {
+    spec[op](name, T(value).output('nbt'))
   },
-  cond_brackets_pair: ({ name, value }, { T, toNbt }) => T(name) + "=" + T(value),
+  cond_brackets_pair: ({ name, value }, { T, toNbt }) => T(name) + "=" + T(value).output('bool'),
   cond_brackets_braces: ({ items }, { T, toNbt }) => "{" + items.map(T).join(",") + "}",
 
 
-  item_spec: ({ resloc, nbt }, { T, toNbt }) => `${T(resloc)}${nbt ? toNbt(nbt) : ""}`,
-  block_state: ({ name, value }, { T }) => T(name) + "=" + T(value),
-  block_states: ({ states }, { T }) => "[" + states.map(T).join(",") + "]",
-  block_spec: ({ resloc, states, nbt }, { T, O, toNbt }) => `${T(resloc)}${O(states)}${nbt ? toNbt(nbt) : ""}`,
-  
-  test_block: ({ spec }, { T }) => `block ~ ~ ~ ${T(spec)}`,
-  test_block_pos: ({ pos, spec }, { T }) => `block ${T(pos)} ${T(spec)}`,
-  test_predicate: ({ resloc }, { T }) => `predicate ${T(resloc)}`,
+  item_spec: ({ resloc, nbt }, { T, toNbt }) => `${T(resloc).output('resloc_or_tag_mc')}${nbt ? T(nbt).output('nbt') : ""}`,
   
   resname: ({ parts }, { T }) => parts.map(T).join("/"),
   resloc(node, { T, ns }) {
@@ -126,13 +123,15 @@ const transformers = exports.transformers = {
   range_lt: ({ to }, { Nbt }) => `..${Nbt(to) - 0.000001}`,
 
 
-  cmd_summon: ({ pos, type, nbt, then }, { T, anonFunction, Nbt, toNbt }) => {
-    if (!then) return `summon ${T(type)} ${pos ? T(pos) : "~ ~ ~"} ${nbt ? toNbt(nbt) : ''}`
+  cmd_summon: ({ position, type, nbt, then }, { T, anonFunction, Nbt, toNbt }) => {
+    position = position ? T(position).output('position') : "~ ~ ~";
+    type = T(type).output('resloc_mc')
+    if (!then) return `summon ${type} ${position} ${nbt ? toNbt(nbt) : ""}`
     const tag = "--minity--internal-summoned"
     nbt = Nbt(nbt || {});
     nbt.Tags = [...nbt.Tags || [], tag];
     return anonFunction([
-      `summon ${T(type)} ${pos ? T(pos) : "~ ~ ~"} ${nbt ? toNbt(nbt) : ''}`,
+      `summon ${type} ${position} ${toNbt(nbt)}`,
       `execute as @e[tag=${tag}] run ${anonFunction([
         `tag @s remove ${tag}`,
         ...T(then).getCode()
@@ -146,47 +145,64 @@ const transformers = exports.transformers = {
     count = count ? toNbt(count) : "";
     return `clear ${T(selector)} ${T(item)} ${count}`
   },
-  cmd_setblock: ({ pos, block }, { T }) => {
-    return `setblock ${pos ? T(pos) : "~ ~ ~"} ${T(block)}`
+  cmd_setblock: ({ position, block }, { T }) => {
+    return `setblock ${position ? T(position).output('position') : "~ ~ ~"} ${T(block).output('block_spec')}`
   },
 
 
-  var_id: ({ name }, { T, scope }) => scope.vars.get(name).code(),
-  score_id: ({ holder, id }, { T, scope }) => scope.scores.get(T(id)).code(T(holder)),
-  constant_id: ({ value }, { constantId, Nbt }) => constantId(Nbt(value)),
-
-
-  datapath: ({ spec }, { T }) => {
-    const { type, id, path } = T(spec);
-    return `${type} ${id} ${path}`
+  nbt_path: ({ path }, { T }) => {
+    console.log(path)
+    return path.map(T).join("")
   },
-  datapath_var: ({ path }, { T, ns }) => ({ type: "storage", id: `${ns}:zzz_minity_vars`, path: T(path) }),
-  datapath_storage: ({ name, path }, { T }) => ({ type: "storage", id: T(name), path: T(path) }),
-  datapath_entity: ({ selector, path }, { T }) => ({ type: "entity", id: T(selector), path: T(path) }),
-  datapath_block: ({ position, path }, { T }) => ({ type: "block", id: T(position), path: T(path) }),
-  
-  nbt_path: ({ path }, { T }) => path.map(T).join(""),
-  nbt_path_root: ({ name, match }, { T }) => [name, match].filter(Boolean).map(T).join(""),
-  nbt_path_member: ({ name, match }, { T }) => "." + [name, match].filter(Boolean).map(T).join(""),
+  nbt_path_step: ({ name, match }, { T }) => {
+    console.log(name,match)
+    let ret = "";
+    if (name) {
+      name = T(name);
+      assert (name.canGet('string'),"must be a string");
+      ret+=name.output('nbt')
+    }
+    if (match) {
+      match = T(match);
+      ret+=match;
+    }
+    return ret;
+  },
+  nbt_path_member: ({ step }, { T }) => {
+    return '.'+T(step)
+  },
   nbt_path_list: () => "[]",
-  nbt_path_list_element: ({ index }, { T }) => (`[${T(index)}]`),
-  nbt_path_list_match: ({ match }, { toNbt }) => `[${toNbt(match)}]`,
-  nbt_path_match: ({ match }, { toNbt }) => `${toNbt(match)}`,
+  nbt_path_list_element: ({ index }, { T }) => (`[${T(index).output('int')}]`),
+  nbt_path_list_match: ({ match }, { T }) => `[${T(match).output('nbt')}]`,
+  nbt_path_match: ({ match }, { T }) => `${T(match).output('nbt')}`,
 
   template_chars: ({ chars }) => chars,
   template_parts: ({ parts }, { T }) => parts.map(T).join(""),
-  template_expand_arg: ({ name }, { toNbt, Nbt, scope }) => Nbt(scope.getArg(Nbt(name))),
-  template_expand_tag: ({ name }, { T, scope }) => scope.tags.get(T(name)).code(),
-  template_expand_var: ({ name }, { T, scope }) => scope.vars.get(T(name)).code(),
+  template_expand_tag: ({ name }, { T }) => T(name).output('tag'),
   template_expand_score: ({ name }, { T, scope }) => scope.scores.get(T(name)).objective,
-  template_expand_value: ({ value }, { Nbt }) => {
-    return JSON.stringify(Nbt(value))
+  template_expand_json: ({ value }, { T }) => {
+    return T(value).output('json')
   },
-  template_expand_score_id: ({ id }, { T }) => (T(id)),
-  template_expand_selector: ({ selector }, { T }) => T(selector),
-  template_expand_coords: ({ coords }, { T }) => T(coords),
+  template_expand_value: ({ value }, { T }) => {
+    value = T(value);
+    if (value.canOutput('template_expand')) {
+      return value.output('template_expand')
+    } else {
+      return value.get('string')
+    }
+  },
 
   raw_line: ({ parts }, { T }) => parts.map(T),
+  raw_expand_value: ({ value }, { T }) => {
+    value = T(value);
+    if (value.canGet('raw_component')) {
+      return value.get('raw_component')
+    } else if (value.canOutput('template_expand')) {
+      return value.output('template_expand')
+    } else {
+      return value.get('string')
+    }
+  },
   raw_expand_var: ({ name }, { T, Nbt, scope }) => {
     const { objective, target } = scope.vars.get(T(name))
     return Nbt({ score: { objective, name: target } })
@@ -218,7 +234,8 @@ const transformers = exports.transformers = {
     var block = false, paragraph = false;
     var attrs = {};
     for (const { name, value } of attr) {
-      attrs[Nbt(name)] = Nbt(value);
+      //console.log(value.$,T(value).get('value'));
+      attrs[Nbt(name)] = T(value).get('value');
     }
     const spec = rawTags[tag];
     if (!spec) {
@@ -291,32 +308,16 @@ const transformers = exports.transformers = {
     return ""
   },
 
-  bossbar_add: ({ id, name }, { T, Nbt }) => `bossbar add ${T(id)} ${JSON.stringify(Nbt(name))}`,
-  bossbar_remove: ({ id }, { T, toNbt }) => `bossbar remove ${T(id)}`,
+  bossbar_add: ({ resloc, name }, { T, Nbt }) => {
+    if (!name) return `bossbar add ${T(resloc).output('resloc')}`;
+    return `bossbar add ${T(resloc).output('resloc')} ${T(name).output('json')}`
+  },
+  bossbar_remove: ({ resloc }, { T }) => `bossbar remove ${T(resloc).output('resloc')}`,
 
   /************************************************************************* */
 
   
-  RelativeCoords: ({ _coords }, { sumCoords }) => {
-    let { x, y, z } = sumCoords(_coords);
-    return `~${x || ""} ~${y || ""} ~${z || ""}`
-  },
-  LocalCoords: ({ _coords }, { sumCoords }) => {
-    let { x, y, z } = sumCoords(_coords);
-    return `^${x || ""} ^${y || ""} ^${z || ""}`
-  },
-  RelativeAngles: ({ _coords }, { sumCoords }) => {
-    let { x, y } = sumCoords(_coords);
-    return `~${x || ""} ~${y || ""}`
-  },
-  NativeAngles: ({ x, y }, { T }) => `${T(x)} ${T(y)}`,
-  NativeCoords: ({ x, y, z }, { T }) => `${T(x)} ${T(y)} ${T(z)}`,
-  TildeCoord: ({ arg }, { T }) => arg ? `~${T(arg)}` : '~',
-  CaretCoord: ({ arg }, { T }) => arg ? `^${T(arg)}` : '^',
   
-  
-
-
   MacroCallSpec: (
     { ns, name, args },
     { macroExists, ns: NS }

@@ -22,13 +22,13 @@ const OpBinary = exports.OpBinary = class OpBinary extends CompilerValue {
     this.right = right;
   };
 
-  outputBinary = () => {
-    const left = this.left[this.leftProp]
+  outputBinary = (leftProp,binaryOp=(l,r)=>l(r())) => {
+    const left = this.left[leftProp]
     this.assert(left, "invalid lvalue " + left?.describe)
     const right = this.right[OUTPUT]
     for (const id in left) {
       if (right[id]) {
-        return this.binaryOp(left[id], right[id])
+        return binaryOp(left[id], right[id])
       }
     }
     this.fail("invalid rvalue")
@@ -36,18 +36,10 @@ const OpBinary = exports.OpBinary = class OpBinary extends CompilerValue {
 }
 
 const OpCompare = exports.OpCompare = class OpCompare extends OpBinary {
-  leftProp = null
-  //rightProp = OUTPUT
-  binaryOp = (LEFT, RIGHT) => LEFT(RIGHT())
-
-  constructor({ left, right, ...rest }) {
-    super(rest)
-    this.left = left;
-    this.right = right;
-  };
 
   [OUTPUT] = {
-    'test_true': () => this.outputBinary()
+    ...this[OUTPUT],
+    'test_true': () => this.outputBinary(this.leftProp)
   };
 }
 
@@ -68,9 +60,10 @@ exports.OpGTE = class OpGTE extends OpCompare {
 exports.OpEQ = class OpEQ extends OpCompare {
   leftProp = TEST_EQ
 }
-exports.OpNEQ = class OpNEQ extends OpCompare {
+exports.OpNEQ = class OpNEQ extends OpBinary {
   leftProp = TEST_EQ
   [OUTPUT] = {
-    'test_true': () => this.outputBinary()
+    ...this[OUTPUT],
+    'test_false': () => this.outputBinary(this.leftProp)
   };
 }

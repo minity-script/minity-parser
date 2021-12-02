@@ -27,7 +27,7 @@ const BossBarProp = exports.BossBarProp = class BossBarProp extends CompilerValu
     super(rest)
     this.resloc = resloc
     this.prop = prop
-    this.code = this.resloc + " " + this.prop 
+    this.code = this.resloc.output('resloc') + " " + this.prop 
   };
 
   [ASSIGN] = {

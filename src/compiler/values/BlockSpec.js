@@ -21,6 +21,18 @@ const BlockSpec = exports.BlockSpec = class BlockSpec extends CompilerValue {
       + (this.states ? this.states.output('block_states') : "")
       + (this.nbt ? this.nbt.output('nbt') : "")
     ),
-    'test_true': () => 'block ' + this.output('block_spec')
+    'test_true': () => `block ~ ~ ~ ${this.output('block_spec')}`
+  };
+}
+
+const BlockPredicate = exports.BlockPredicate = class BlockPredicate extends CompilerValue {
+  constructor({ block, position, ...rest }) {
+    super(rest);
+    this.block = block
+    this.position = position
+  };
+  [OUTPUT] = {
+    ...super[OUTPUT],
+    'test_true': () => `block ${this.position.output('position')} ${this.block.output('block_spec')}`
   };
 }

@@ -1,4 +1,5 @@
 const assert = require("assert");
+const { CompilerNode } = require("../CompilerNode");
 const {
   OUTPUT,
   VALUE,
@@ -28,6 +29,20 @@ const LiteralArray = exports.LiteralArray = class LiteralArray extends LiteralVa
 }
 
 
+const LiteralRaw = exports.LiteralRaw = class LiteralRaw extends LiteralValue {
+  constructor({ value, ...rest }) {
+    super(rest)
+    this.value = value
+  }
+  [VALUE] = {
+    ...this[VALUE],
+    'value': () => this.value
+  };
+  [OUTPUT] = {
+    ...this[OUTPUT],
+    'json': () => JSON.stringify(this.value),
+  }
+}
 
 const LiteralObject = exports.LiteralObject = class LiteralObject extends LiteralValue {
 
@@ -60,7 +75,7 @@ const LiteralObject = exports.LiteralObject = class LiteralObject extends Litera
   }
 }
 
-const SpreadObject = exports.SpreadObject = class SpreadObject extends CompilerValue {
+const SpreadObject = exports.SpreadObject = class SpreadObject extends CompilerNode {
   constructor({ right, ...rest }) {
     super(rest);
     this.right = right;
@@ -68,7 +83,7 @@ const SpreadObject = exports.SpreadObject = class SpreadObject extends CompilerV
   [PROPS] = () => this.right.props
 }
 
-const SpreadArray = exports.SpreadArray = class SpreadArray extends CompilerValue {
+const SpreadArray = exports.SpreadArray = class SpreadArray extends CompilerNode {
   constructor({ right, ...rest }) {
     super(rest);
     this.right = right;

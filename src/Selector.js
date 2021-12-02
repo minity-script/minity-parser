@@ -1,4 +1,22 @@
 const { MinityError } = require("./utils");
+const  assert  = require('assert')
+
+const CONDITION_OUTPUTS = {
+  type:'resloc_or_tag_mc',
+  predicate: 'resloc',
+  x:'number', dx:'number',
+  y:'number', dy:'number',
+  z:'number', dz:'number',
+  limit: 'number',
+  sort: null,
+  gamemode: null,
+  team: 'team',
+  tag: 'tag',
+  name: 'string',
+  nbt: 'nbt',
+  level: null,
+  distance: null,
+}
 
 exports.Selector = class SelectorSpec {
   includes = {}
@@ -8,10 +26,10 @@ exports.Selector = class SelectorSpec {
 
   limit = null
 
-  constructor(initial) {
-    if (initial.length > 1) {
+  constructor({initial,type}) {
+    if (!initial) {
       this.initial = "e";
-      this.include("type", initial)
+      this.include("type", type, true)
     } else {
       this.initial = initial;
     }
@@ -21,7 +39,22 @@ exports.Selector = class SelectorSpec {
     return this.limit === 1 || this.initial.match(/[psr]/)
   }
 
-  include(key, cond) {
+  outputCondition(key,cond,transform) {
+    assert (key in CONDITION_OUTPUTS, 'bad condition '+key);
+    if (!transform) return cond;
+    if (!cond) return ""
+    const type = CONDITION_OUTPUTS[key];
+    if (!type) return cond
+    return cond.output(type)
+  }
+
+  include(key, cond, transform) {
+    if (false && key=='predicate') {
+      console.log({key,cond,transform})
+      throw {message:'PREDICATE'}
+      process.exit(0)
+    }
+    cond = this.outputCondition(key,cond,transform)
     switch (key) {
       case "limit":
         this.limit = cond
@@ -53,7 +86,8 @@ exports.Selector = class SelectorSpec {
     if (key in this.scores) throw new MinityError("cannot duplicate score " + key);
     this.scores[key] = cond;
   }
-  exclude(key, cond) {
+  exclude(key, cond,transform) {
+    cond = this.outputCondition(key,cond,transform)
     switch (key) {
       case "name":
       case "nbt":

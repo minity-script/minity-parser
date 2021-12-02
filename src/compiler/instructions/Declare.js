@@ -35,7 +35,9 @@ const DeclareScore = exports.DeclareScore = class DeclareScore extends DeclareSc
 }
 
 const DeclareTag = exports.DeclareTag = class DeclareTag extends DeclareScoped {
-  [DECLARE] = () => this.frame.scope.tags.declare(this.name);
+  [DECLARE] = () => this.frame.scope.tags.declare(
+    this.name.get('string')
+  );
 }
 
 
@@ -47,7 +49,11 @@ const DeclareVar = exports.DeclareVar = class DeclareVar extends DeclareScoped {
   [DECLARE] = () => this.frame.scope.vars.declare(this.name);
   [CODE] = () => {
     if (!this.value) return "";
-    const newVar = this.frame.scope.vars.create(this.name)
+    const {Variable}=require('../values/ScoreboardEntry');
+    const { Assign } = require("./Assign");
+    const newVar = Variable.createFrom(this,{name:this.name});
+    const assign = Assign.createFrom(this,{left:newVar,right:this.value});
+    return assign.getCode();
     return `scoreboard players set ${newVar.code} ${0 | this.value}`
   }
 }
@@ -112,7 +118,7 @@ const Import = exports.Import = class Import extends Declare {
     super(rest);
     //this.file = file
     const {frame} = this
-    frame.importFile(String(file))
+    frame.importFile(file.get('string'))
   };
   [DECLARE] = () => {
     //this.frame.importFile(String(this.file))
@@ -136,7 +142,9 @@ const DeclareEvent = exports.DeclareEvent = class DeclareEvent extends Declare {
     ])
     frame.result.addJson(frame.ns, ["advancements", id], {
       criteria: {
-        [id]: { trigger, conditions }
+        [id]: { 
+          trigger:trigger.output('resloc_mc'), 
+          conditions: conditions.get('object') }
       },
       rewards: { function: fn.resloc }
     })

@@ -3,8 +3,9 @@ const { LiteralString } = require("./LiteralScalar");
 const {
   OUTPUT,
   CONVERT,
+  VALUE,
   ITEMS,
-  PROPS
+  PROPS,
 } = require("../symbols");
 
 const { CompilerValue } = require("./CompilerValue");
@@ -13,15 +14,19 @@ const ResLoc = exports.ResLoc = class ResLoc extends CompilerValue {
   constructor({ ns, nameParts, ...rest }) {
     super(rest)
     this.ns = ns;
-    this.name = nameParts.map(it=>it.get('string')).join("/")
+    this.name = nameParts.map(it => it.get('string')).join("/")
   };
   getNs = def => {
     return this.ns ? this.ns.get('string') : (def || this.frame.ns)
   };
+  [VALUE] = {
+    ...this[OUTPUT],
+    'raw_data_source': () => ({ storage: this.output('position') }),
+  };
   [CONVERT] = {
-    'BlockSpec': ()=> {
+    'BlockSpec': () => {
       const { BlockSpec } = require("./BlockSpec");
-      return BlockSpec.createFrom(this,{resloc:this})
+      return BlockSpec.createFrom(this, { resloc: this })
     },
   };
   [OUTPUT] = {

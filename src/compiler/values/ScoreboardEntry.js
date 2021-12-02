@@ -19,7 +19,8 @@ const {
   ASSIGN_DIV,
   ASSIGN_MOD,
   ASSIGN_GT,
-  ASSIGN_LT
+  ASSIGN_LT,
+  VALUE
 } = require("../symbols");
 
 const {CompilerValue} = require("./CompilerValue")
@@ -31,12 +32,21 @@ const ScoreboardEntry = exports.ScoreboardEntry = class ScoreboardEntry extends 
     this.target = target
     this.code = target + " " + objective
   };
-
+  [VALUE] = {
+    ...this[VALUE],
+    'raw_component':()=>({
+      score: {
+        name: this.target,
+        objective: this.objective
+      }
+    })
+  };
   [OUTPUT] = {
-    ...super[OUTPUT],
+    ...this[OUTPUT],
     'scoreboard': () => this.code,
     'getter':() => `run scoreboard players get ${this.code}`,
-    'test_false': () => `score ${this.code} matches 0`
+    'test_false': () => `score ${this.code} matches 0`,
+    'template_expand': () =>this.code,
   };
 
   [ASSIGN] = {
@@ -128,4 +138,19 @@ exports.Score = class Score extends ScoreboardEntry {
     super({frame,objective,target,...rest})
     this.name = name
   }
+}
+
+exports.Tag = class Tag extends CompilerValue {
+  constructor({name,...rest}) {
+    super(rest)
+    this.name = name.get('string');
+    this.tag = this.frame.scope.tags.get(this.name);
+  };
+
+  [OUTPUT] = {
+    ...this[OUTPUT],
+    'tag': () => this.tag.id,
+    'template_expand': () => this.tag.id,
+  };
+
 }

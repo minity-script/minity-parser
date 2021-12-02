@@ -2,7 +2,8 @@ const assert = require("assert");
 const {
   OUTPUT,
   VALUE,
-  CONVERT
+  CONVERT,
+  ITEMS
 } = require("../symbols");
 
 const { CompilerValue } = require("./CompilerValue")
@@ -16,6 +17,7 @@ const LiteralScalar = exports.LiteralScalar = class LiteralScalar extends Litera
   }
   [VALUE] = {
     'string': () => String(this.value),
+    'template_expand': () => this.get('string')
   };
   [OUTPUT] = {
     ...this[OUTPUT],
@@ -93,6 +95,9 @@ const LiteralBoolean = exports.LiteralBoolean = class LiteralBoolean extends Lit
 }
 
 const LiteralString = exports.LiteralString = class LiteralString extends LiteralScalar {
+  get describe() {
+    return this.constructor.name + " " +JSON.stringify(this.value)
+  };
   [VALUE] = {
     ...this[VALUE],
     'string': () => String(this.value),
@@ -100,18 +105,28 @@ const LiteralString = exports.LiteralString = class LiteralString extends Litera
   };
   [OUTPUT] = {
     ...this[OUTPUT],
+    'template_expand':()=>this.get('string'),
     'nbt': () => {
       const { value } = this
-      if (value.match(/^[a-z_][a-z0-9_]*$/i)) return value
+      if (value.match(/^[a-z_][a-z0-9_]+$/i)) return value
       return JSON.stringify(value)
-    }
+    },
+    'team': () => {
+      const { value } = this
+      if (value.match(/^[-_+.a-z]+$/i)) return value
+      this.fail('bad team name')
+    },
+    'tag': () => this.frame.scope.tags.get(this.get('string')).id,
   };
   [CONVERT] = {
     ...this[CONVERT],
     'ResTag': () => {
       const { ResTag } = require("./ResLoc");
       const match = this.get('string').match(/^#(\w+:)?(\w+(?:[/]\w+)*)$/);
-      if (!match) return false;
+      if (!match) {
+        console.log(this.get('string'),'NOT TAG')
+        return false;
+      }
       const [,ns,name] = match;
       return ResTag.createFrom(this,{
         ns:ns && LiteralString.createFrom(this, { value:ns }),
@@ -121,22 +136,32 @@ const LiteralString = exports.LiteralString = class LiteralString extends Litera
     'ResLoc': () => {
       const { ResLoc } = require("./ResLoc");
       const match = this.get('string').match(/^(\w+:)?(\w+(?:[/]\w+)*)$/);
-      if (!match) return false;
+      if (!match) {
+        console.log(this.get('string'),'NOT LOC')
+        return false;
+      }
       const [,ns,name] = match;
       return ResLoc.createFrom(this,{
         ns:ns && LiteralString.createFrom(this, { value:ns }),
         nameParts:name.split('/').map(value=>LiteralString.createFrom(this,{value}))
       })
     },
-  };
-  
+  };  
 }
 
-exports.FunctionJson = class FunctionJson extends CompilerValue {
+const CompilerFunction = exports.CompilerFunction = class CompilerFunction extends CompilerValue {
   constructor({arg,...rest}) {
     super(rest)
     this.arg=arg
-  }
+  };
+  [ITEMS]=()=>[this]
+  
+}
+exports.FunctionJson = class FunctionJson extends CompilerFunction {
+  [CONVERT] = {
+    ...this[CONVERT],
+    'string':()=>LiteralString.createFrom(this,{value:this.get('string')})
+  };
   [VALUE] = {
     'string': () => this.arg.output('json'),
     'value': () => this.get('string'),
@@ -151,11 +176,11 @@ exports.FunctionJson = class FunctionJson extends CompilerValue {
   };
 }
 
-exports.FunctionSnbt = class FunctionSnbt extends CompilerValue {
-  constructor({arg,...rest}) {
-    super(rest)
-    this.arg=arg
-  }
+exports.FunctionSnbt = class FunctionSnbt extends CompilerFunction {
+  [CONVERT] = {
+    ...this[CONVERT],
+    'string':()=>LiteralString.createFrom(this,{value:this.get('string')})
+  };
   [VALUE] = {
     'string': () => this.arg.output('nbt'),
     'value': () => this.get('string'),
