@@ -84,7 +84,7 @@ exports.DataPathGeneric = class DataPathGeneric extends DataPath {
     ...this[VALUE],
     'raw_component':()=>({
       ...this.left.get('raw_data_source'),
-      path:this.path
+      nbt:this.path
     }),
   };
 }
@@ -99,7 +99,7 @@ exports.DataPathVar = class DataPathVar extends DataPath {
     ...this[VALUE],
     'raw_component':()=>({
       storage: this.storage,
-      path:this.path
+      nbt:this.path
     }),
   };
 }

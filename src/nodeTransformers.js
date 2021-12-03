@@ -203,23 +203,6 @@ const transformers = exports.transformers = {
       return value.get('string')
     }
   },
-  raw_expand_var: ({ name }, { T, Nbt, scope }) => {
-    const { objective, target } = scope.vars.get(T(name))
-    return Nbt({ score: { objective, name: target } })
-  },
-  raw_expand_score_id: ({ holder, id }, { T, Nbt, scope }) => Nbt({
-    score: {
-      objective: scope.objectives.get(T(id)).objective,
-      name: Nbt(T(holder)),
-    }
-  }),
-  raw_expand_nbt: ({ spec }, { T }) => {
-    const { type, id, path } = T(spec);
-    return {
-      [type]: id,
-      nbt: path,
-    }
-  },
   ident(node) {
     return node.ident;
   },

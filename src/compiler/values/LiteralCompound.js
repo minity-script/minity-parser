@@ -67,7 +67,7 @@ const LiteralObject = exports.LiteralObject = class LiteralObject extends Litera
       it.key.output('nbt') + ":" + it.value.output('nbt')
     )).join(',') + '}',
     'block_states': () => '[' + this.props.map(it => (
-      it.key.output('nbt') + "=" + it.value.output('nbt')
+      it.key.get('string') + "=" + it.value.get('value')
     )).join(',') + ']',
     'json': () => '{' + this.props.map(it => (
       it.key.output('json') + ":" + it.value.output('json')

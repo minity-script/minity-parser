@@ -21,7 +21,7 @@ exports.Selector = class Selector extends CompilerValue {
     },
     'test_true':() => `entity ${this.output('selector')}`,
     'data_source': () => `entity ${this.output('selector_single')}`,
-    'template_expand': () => this.output('selector'),
+    'template_expand': () => `${this.output('selector')}`,
   };
   [VALUE] = {
     ...this[VALUE],

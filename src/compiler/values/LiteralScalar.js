@@ -88,6 +88,10 @@ const LiteralByte = exports.LiteralByte = class LiteralByte extends LiteralNumbe
 }
 
 const LiteralBoolean = exports.LiteralBoolean = class LiteralBoolean extends LiteralNumber {
+  [VALUE] = {
+    ...this[VALUE],
+    'value': () => !!this.value,
+  };
   [OUTPUT] = {
     ...this[OUTPUT],
     'nbt': () => +!!this.value + 'b',
@@ -167,10 +171,11 @@ exports.FunctionJson = class FunctionJson extends CompilerFunction {
     'value': () => this.get('string'),
   };
   [OUTPUT] = {
-    'string': () => "'"+this.get('string')
-      .split(/([^'\\]+|\\.|')/)
-      .map(t => t == "'" ? "\\'" : t)
-      .join("")+"'",
+    'string': () => "'"
+      + this.get('string')
+        .replace(/[\\]/g,"\\\\")
+        .replace(/[']/g,"\\'")
+      + "'",
     'nbt': () => this.output('string'),
     'json': () => JSON.stringify(this.get('string')),
   };
@@ -182,6 +187,7 @@ exports.FunctionSnbt = class FunctionSnbt extends CompilerFunction {
     'string':()=>LiteralString.createFrom(this,{value:this.get('string')})
   };
   [VALUE] = {
+    ...this[VALUE],
     'string': () => this.arg.output('nbt'),
     'value': () => this.get('string'),
   };

@@ -56,7 +56,8 @@ const MacroCall = exports.MacroCall = class MacroCall extends CompilerInstructio
   };
   [CODE] = () => {
     const {frame,resloc,args} = this;
-    const {ns,name} = resloc;
+    let {ns,name} = resloc;
+    ns ||= this.frame.ns
     const {macroExists,functionExists,expandMacro} = frame;
     if (macroExists(ns, name)) {
       return expandMacro(ns, name, args)
@@ -218,7 +219,7 @@ exports.TestTrue = class TestTrue extends CompilerNode {
   [OUTPUT] = {
     'test': () => {
       const { arg } = this;
-      if (arg.canOutput('test_true')) return `ìf ${arg.output('test_true')}`
+      if (arg.canOutput('test_true')) return `if ${arg.output('test_true')}`
       if (arg.canOutput('test_false')) return `unless ${arg.output('test_false')}`
       this.fail('bad arg ' + arg.describe + " value " +arg.value)
     }

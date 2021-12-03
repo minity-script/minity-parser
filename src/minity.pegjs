@@ -1099,10 +1099,13 @@ WrappedCommand
 
     template_part 
       = template_expand
-      / template_expand_value
       / template_chars
 
     template_expand
+      = template_expand_special
+      / template_expand_value
+
+    template_expand_special
       = template_expand_json
       / template_expand_tag
       / template_expand_score
@@ -1131,7 +1134,7 @@ WrappedCommand
         }
 
     template_expand_value  
-      = "{" value:ValueExpr "}" {
+      = "{" value:ValueAtom "}" {
           return N('template_expand_value', { value } )
         }
         
